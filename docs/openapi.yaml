@@ -1,0 +1,368 @@
+openapi: 3.0.3
+info:
+  title: API Activos y Órdenes
+  version: 0.1.0
+  description: |
+    API REST en capas (Express + Node) sobre un recorte **hipotético** de un sistema de inversiones en CEDEARs.
+    Un **Activo** es un CEDEAR seguido por el sistema (nivel de seguimiento, cantidad en cartera y tope permitido).
+    Una **Orden** (próximamente) es una intención de compra o venta sobre un activo.
+
+    Todos los errores tienen la forma `{ "error": { "code", "message", "details?" } }`.
+    La persistencia (`memory` | `sequelize`) se elige por variable de entorno y no cambia las respuestas.
+
+servers:
+  - url: /
+    description: Este mismo servidor (mismo host y puerto que esta página)
+
+tags:
+  - name: Activos
+    description: CEDEARs seguidos por el sistema
+
+paths:
+  /activos:
+    get:
+      tags: [Activos]
+      summary: Listar activos (filtros, orden y paginación)
+      operationId: listarActivos
+      parameters:
+        - name: nivel
+          in: query
+          description: Filtra por nivel de seguimiento
+          schema:
+            $ref: "#/components/schemas/Nivel"
+        - name: mercado
+          in: query
+          description: Filtra por mercado
+          schema:
+            $ref: "#/components/schemas/Mercado"
+        - name: sort
+          in: query
+          description: Campo de orden; con `-` adelante, descendente
+          schema:
+            type: string
+            pattern: '^-?(id|ticker|nombre|mercado|ratio|nivel|cantidad|topeCedears)$'
+            example: -cantidad
+        - name: page
+          in: query
+          description: Número de página (desde 1)
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: limit
+          in: query
+          description: Tamaño de página (máximo 100)
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        "200":
+          description: Página de activos con metadata
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListadoActivos"
+              example:
+                page: 1
+                limit: 20
+                total: 3
+                data:
+                  - { id: 1, ticker: KO, nombre: Coca-Cola, mercado: NYSE, ratio: 5, nivel: L3, cantidad: 40, topeCedears: 100 }
+                  - { id: 2, ticker: AAPL, nombre: Apple, mercado: NASDAQ, ratio: 20, nivel: L2, cantidad: 0, topeCedears: 30 }
+                  - { id: 3, ticker: GGAL, nombre: Grupo Financiero Galicia, mercado: BYMA, ratio: 1, nivel: L1, cantidad: 0, topeCedears: 50 }
+        "400":
+          $ref: "#/components/responses/ErrorValidacion"
+    post:
+      tags: [Activos]
+      summary: Dar de alta un activo
+      operationId: crearActivo
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ActivoCreate"
+            examples:
+              completo:
+                summary: Alta completa
+                value: { ticker: MSFT, nombre: Microsoft, mercado: NASDAQ, ratio: 30, nivel: L2, cantidad: 0, topeCedears: 60 }
+              sinCantidad:
+                summary: Sin cantidad (toma 0 por defecto)
+                value: { ticker: PBR, nombre: Petrobras, mercado: NYSE, ratio: 2, nivel: L1, topeCedears: 80 }
+      responses:
+        "201":
+          description: Activo creado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Activo"
+              example: { id: 4, ticker: MSFT, nombre: Microsoft, mercado: NASDAQ, ratio: 30, nivel: L2, cantidad: 0, topeCedears: 60 }
+        "400":
+          $ref: "#/components/responses/ErrorValidacion"
+        "409":
+          description: Ya existe un activo con ese ticker (regla de negocio 2)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                error: { code: TICKER_DUPLICADO, message: Ya existe un activo con el ticker KO }
+
+  /activos/{id}:
+    parameters:
+      - $ref: "#/components/parameters/ActivoId"
+    get:
+      tags: [Activos]
+      summary: Obtener un activo por id
+      operationId: obtenerActivo
+      responses:
+        "200":
+          description: Activo encontrado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Activo"
+              example: { id: 1, ticker: KO, nombre: Coca-Cola, mercado: NYSE, ratio: 5, nivel: L3, cantidad: 40, topeCedears: 100 }
+        "400":
+          $ref: "#/components/responses/ErrorValidacion"
+        "404":
+          $ref: "#/components/responses/ActivoNoEncontrado"
+    put:
+      tags: [Activos]
+      summary: Modificar parcialmente un activo
+      description: Solo se pisan los campos enviados. Hay que enviar al menos uno.
+      operationId: actualizarActivo
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ActivoUpdate"
+            examples:
+              subirNivel:
+                summary: Pasar a lista de compra
+                value: { nivel: L2 }
+              ajustarPosicion:
+                summary: Ajustar cantidad y tope
+                value: { cantidad: 45, topeCedears: 120 }
+      responses:
+        "200":
+          description: Activo actualizado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Activo"
+              example: { id: 3, ticker: GGAL, nombre: Grupo Financiero Galicia, mercado: BYMA, ratio: 1, nivel: L2, cantidad: 0, topeCedears: 50 }
+        "400":
+          $ref: "#/components/responses/ErrorValidacion"
+        "404":
+          $ref: "#/components/responses/ActivoNoEncontrado"
+        "409":
+          description: El ticker nuevo ya pertenece a otro activo (regla de negocio 2)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                error: { code: TICKER_DUPLICADO, message: Ya existe otro activo con el ticker KO }
+    delete:
+      tags: [Activos]
+      summary: Eliminar un activo
+      operationId: eliminarActivo
+      responses:
+        "204":
+          description: Eliminado (sin cuerpo)
+        "400":
+          $ref: "#/components/responses/ErrorValidacion"
+        "404":
+          $ref: "#/components/responses/ActivoNoEncontrado"
+
+components:
+  parameters:
+    ActivoId:
+      name: id
+      in: path
+      required: true
+      description: Id del activo (entero positivo)
+      schema:
+        type: integer
+        minimum: 1
+        example: 1
+
+  responses:
+    ErrorValidacion:
+      description: Datos de entrada inválidos (body, query o params). `details` lista cada campo con su problema.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            error:
+              code: VALIDATION_ERROR
+              message: Datos de body inválidos
+              details:
+                - { field: ticker, message: "El ticker debe tener entre 1 y 10 caracteres: letras mayúsculas, dígitos o punto, empezando con letra" }
+                - { field: ratio, message: El ratio debe ser mayor a 0 }
+    ActivoNoEncontrado:
+      description: No existe un activo con ese id
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            error: { code: ACTIVO_NO_ENCONTRADO, message: No existe un activo con id 999 }
+
+  schemas:
+    Mercado:
+      type: string
+      enum: [NYSE, NASDAQ, BYMA]
+      description: Mercado donde cotiza el subyacente (BYMA para acciones locales)
+
+    Nivel:
+      type: string
+      enum: [L0, L1, L2, L3]
+      description: |
+        Nivel de seguimiento: `L0`/`L1` solo seguimiento · `L2` lista para comprar · `L3` con posición en cartera
+
+    Activo:
+      type: object
+      required: [id, ticker, nombre, mercado, ratio, nivel, cantidad, topeCedears]
+      properties:
+        id:
+          type: integer
+          description: Identificador autoincremental
+          example: 1
+        ticker:
+          type: string
+          pattern: '^[A-Z][A-Z0-9.]{0,9}$'
+          description: Símbolo del CEDEAR, único
+          example: KO
+        nombre:
+          type: string
+          example: Coca-Cola
+        mercado:
+          $ref: "#/components/schemas/Mercado"
+        ratio:
+          type: number
+          exclusiveMinimum: 0
+          description: CEDEARs por acción del subyacente (en BYMA, 1)
+          example: 5
+        nivel:
+          $ref: "#/components/schemas/Nivel"
+        cantidad:
+          type: integer
+          minimum: 0
+          description: CEDEARs en cartera
+          example: 40
+        topeCedears:
+          type: integer
+          minimum: 1
+          description: Máximo de CEDEARs permitido para este activo
+          example: 100
+
+    ActivoCreate:
+      type: object
+      description: Cuerpo de `POST /activos`. El `id` lo asigna el servidor; `cantidad` toma 0 si no se envía.
+      required: [ticker, nombre, mercado, ratio, nivel, topeCedears]
+      properties:
+        ticker:
+          type: string
+          pattern: '^[A-Z][A-Z0-9.]{0,9}$'
+          description: Se normaliza a mayúsculas
+          example: MSFT
+        nombre:
+          type: string
+          minLength: 1
+          example: Microsoft
+        mercado:
+          $ref: "#/components/schemas/Mercado"
+        ratio:
+          type: number
+          exclusiveMinimum: 0
+          example: 30
+        nivel:
+          $ref: "#/components/schemas/Nivel"
+        cantidad:
+          type: integer
+          minimum: 0
+          default: 0
+        topeCedears:
+          type: integer
+          minimum: 1
+          example: 60
+
+    ActivoUpdate:
+      type: object
+      description: Cuerpo de `PUT /activos/{id}`. Todos los campos son opcionales, pero debe venir al menos uno.
+      minProperties: 1
+      properties:
+        ticker:
+          type: string
+          pattern: '^[A-Z][A-Z0-9.]{0,9}$'
+        nombre:
+          type: string
+          minLength: 1
+        mercado:
+          $ref: "#/components/schemas/Mercado"
+        ratio:
+          type: number
+          exclusiveMinimum: 0
+        nivel:
+          $ref: "#/components/schemas/Nivel"
+        cantidad:
+          type: integer
+          minimum: 0
+        topeCedears:
+          type: integer
+          minimum: 1
+
+    ListadoActivos:
+      type: object
+      description: Respuesta paginada
+      required: [page, limit, total, data]
+      properties:
+        page:
+          type: integer
+          example: 1
+        limit:
+          type: integer
+          example: 20
+        total:
+          type: integer
+          description: Cantidad de activos que cumplen los filtros (antes de paginar)
+          example: 3
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Activo"
+
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+              description: Código estable para que el cliente decida qué hacer
+              example: ACTIVO_NO_ENCONTRADO
+            message:
+              type: string
+              description: Texto para humanos
+              example: No existe un activo con id 999
+            details:
+              type: array
+              description: Solo en errores de validación, un ítem por campo inválido
+              items:
+                type: object
+                properties:
+                  field:
+                    type: string
+                    example: ratio
+                  message:
+                    type: string
+                    example: El ratio debe ser mayor a 0
