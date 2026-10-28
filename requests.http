@@ -1,0 +1,138 @@
+### Pruebas manuales (extensión REST Client de VS Code). Servidor: npm run dev
+### Documentación interactiva: http://localhost:8000/api-docs
+
+@base = http://localhost:8000
+
+### ===================== ACTIVOS =====================
+
+### 1. Listar activos (semilla: KO, AAPL, GGAL) → 200 con { page, limit, total, data }
+GET {{base}}/activos
+
+### 2. Obtener un activo por id → 200
+GET {{base}}/activos/1
+
+### 3. Activo inexistente → 404 ACTIVO_NO_ENCONTRADO
+GET {{base}}/activos/999
+
+### 4. Id inválido en la URL → 400 VALIDATION_ERROR (params)
+GET {{base}}/activos/abc
+
+### 5. Crear activo con cuerpo incompleto → 400 VALIDATION_ERROR con details (nombre, mercado, ratio, nivel, topeCedears)
+POST {{base}}/activos
+Content-Type: application/json
+
+{
+  "ticker": "MSFT"
+}
+
+### 6. Crear activo con valores fuera de rango → 400 (ticker en minúscula con espacio, mercado fuera del enum, ratio 0, cantidad negativa)
+POST {{base}}/activos
+Content-Type: application/json
+
+{
+  "ticker": "ms ft",
+  "nombre": "Microsoft",
+  "mercado": "LSE",
+  "ratio": 0,
+  "nivel": "L2",
+  "cantidad": -1,
+  "topeCedears": 60
+}
+
+### 7. Crear activo válido sin cantidad → 201, cantidad 0 por defecto, ticker normalizado a mayúsculas
+POST {{base}}/activos
+Content-Type: application/json
+
+{
+  "ticker": "msft",
+  "nombre": "Microsoft",
+  "mercado": "NASDAQ",
+  "ratio": 30,
+  "nivel": "L2",
+  "topeCedears": 60
+}
+
+### 8. Crear activo con ticker repetido → 409 TICKER_DUPLICADO (regla 2)
+POST {{base}}/activos
+Content-Type: application/json
+
+{
+  "ticker": "KO",
+  "nombre": "Coca-Cola bis",
+  "mercado": "NYSE",
+  "ratio": 5,
+  "nivel": "L1",
+  "topeCedears": 10
+}
+
+### 9. JSON mal formado → 400 INVALID_JSON
+POST {{base}}/activos
+Content-Type: application/json
+
+{ "ticker": "PBR",
+
+### 10. Actualizar parcialmente (solo nivel) → 200, el resto intacto
+PUT {{base}}/activos/3
+Content-Type: application/json
+
+{
+  "nivel": "L2"
+}
+
+### 11. Actualizar con cuerpo vacío → 400 (hay que enviar al menos un campo)
+PUT {{base}}/activos/3
+Content-Type: application/json
+
+{}
+
+### 12. Actualizar el ticker al de OTRO activo → 409 TICKER_DUPLICADO
+PUT {{base}}/activos/3
+Content-Type: application/json
+
+{
+  "ticker": "KO"
+}
+
+### 13. Actualizar el ticker al propio → 200 (no es duplicado)
+PUT {{base}}/activos/1
+Content-Type: application/json
+
+{
+  "ticker": "KO",
+  "cantidad": 45
+}
+
+### 14. Actualizar un activo inexistente → 404
+PUT {{base}}/activos/999
+Content-Type: application/json
+
+{
+  "nivel": "L3"
+}
+
+### 15. Filtrar por nivel → 200
+GET {{base}}/activos?nivel=L2
+
+### 16. Filtrar por mercado → 200
+GET {{base}}/activos?mercado=NYSE
+
+### 17. Ordenar por cantidad descendente → 200
+GET {{base}}/activos?sort=-cantidad
+
+### 18. Paginar: página 2 de 2 elementos → 200, total sigue siendo el total sin paginar
+GET {{base}}/activos?page=2&limit=2
+
+### 19. sort por campo no permitido → 400 VALIDATION_ERROR (query)
+GET {{base}}/activos?sort=precio
+
+### 20. limit mayor a 100 → 400 VALIDATION_ERROR (query)
+GET {{base}}/activos?limit=500
+
+### 21. Eliminar un activo → 204
+DELETE {{base}}/activos/2
+
+### 22. Eliminar el mismo activo de nuevo → 404
+DELETE {{base}}/activos/2
+
+### 23. Ruta inexistente → 404 ROUTE_NOT_FOUND
+GET {{base}}/cualquier-cosa
