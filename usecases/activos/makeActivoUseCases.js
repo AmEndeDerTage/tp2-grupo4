@@ -6,16 +6,18 @@ import deleteActivo from "./deleteActivo.js";
 
 /**
  * Factory de casos de uso de Activos.
- * Recibe las dependencias (por ahora, solo el DAO) y devuelve los casos de uso con ellas ya inyectadas,
- * para que el controlador los llame sin conocer ningún DAO.
+ * Recibe sus dependencias por nombre en un objeto (misma forma que makeOrdenUseCases):
+ *  - activosDao: el DAO de la propia entidad
+ *  - ordenesDao: el de la entidad relacionada, para la regla 8 (no borrar un activo con órdenes)
+ * y devuelve los casos de uso con ellas ya inyectadas, para que el controlador los llame sin conocer ningún DAO.
  */
-function makeActivoUseCases(dao) {
+function makeActivoUseCases({ activosDao, ordenesDao }) {
   return {
-    getActivos: (filtros) => getActivos(filtros, dao),
-    getActivoById: (id) => getActivoById(id, dao),
-    createActivo: (data) => createActivo(data, dao),
-    updateActivo: (id, cambios) => updateActivo(id, cambios, dao),
-    deleteActivo: (id) => deleteActivo(id, dao),
+    getActivos: (filtros) => getActivos(filtros, activosDao),
+    getActivoById: (id) => getActivoById(id, activosDao),
+    createActivo: (data) => createActivo(data, activosDao),
+    updateActivo: (id, cambios) => updateActivo(id, cambios, activosDao),
+    deleteActivo: (id) => deleteActivo(id, activosDao, ordenesDao),
   };
 }
 

@@ -28,8 +28,8 @@ async function buildContainer() {
   }
 
   // 2. Casos de uso con sus dependencias inyectadas
-  const activoUseCases = makeActivoUseCases(activosDao);
-  // Las reglas de Órdenes miran el activo de cada orden: por eso reciben también el DAO de Activos
+  // Cada entidad recibe también el DAO de la otra: Activos lo usa para la regla 8 y Órdenes para las reglas sobre el activo
+  const activoUseCases = makeActivoUseCases({ activosDao, ordenesDao });
   const ordenUseCases = makeOrdenUseCases({ ordenesDao, activosDao });
 
   // 3. Controladores con los casos de uso inyectados
