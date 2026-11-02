@@ -1,11 +1,13 @@
 openapi: 3.0.3
 info:
   title: API Activos y Órdenes
-  version: 0.1.0
+  version: 0.2.0
   description: |
     API REST en capas (Express + Node) sobre un recorte **hipotético** de un sistema de inversiones en CEDEARs.
     Un **Activo** es un CEDEAR seguido por el sistema (nivel de seguimiento, cantidad en cartera y tope permitido).
-    Una **Orden** (próximamente) es una intención de compra o venta sobre un activo.
+    Una **Orden** es una intención de compra o venta sobre un activo, armada para colocarla a mano en el broker.
+    Relación **Activo 1 : N Orden** (cada orden tiene su `activoId`). Las reglas de negocio viven en los casos de uso
+    y responden 404 o 409 con un código propio (ver cada endpoint).
 
     Todos los errores tienen la forma `{ "error": { "code", "message", "details?" } }`.
     La persistencia (`memory` | `sequelize`) se elige por variable de entorno y no cambia las respuestas.
@@ -17,6 +19,8 @@ servers:
 tags:
   - name: Activos
     description: CEDEARs seguidos por el sistema
+  - name: Órdenes
+    description: Órdenes de compra o venta sobre un activo (nacen vivas; una ejecutada es historial)
 
 paths:
   /activos:
@@ -170,6 +174,7 @@ paths:
     delete:
       tags: [Activos]
       summary: Eliminar un activo
+      description: Solo si no tiene órdenes, ni vivas ni ejecutadas (regla 8).
       operationId: eliminarActivo
       responses:
         "204":
@@ -178,6 +183,237 @@ paths:
           $ref: "#/components/responses/ErrorValidacion"
         "404":
           $ref: "#/components/responses/ActivoNoEncontrado"
+        "409":
+          description: El activo tiene órdenes asociadas (regla de negocio 8)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                error: { code: ACTIVO_CON_ORDENES, "message": "No se puede eliminar el activo 1: tiene 2 orden(es) asociada(s)" }
+
+  /activos/{id}/ordenes:
+    parameters:
+      - $ref: "#/components/parameters/ActivoId"
+    get:
+      tags: [Activos, Órdenes]
+      summary: Listar las órdenes de un activo (la relación 1:N)
+      operationId: listarOrdenesDeActivo
+      parameters:
+        - $ref: "#/components/parameters/FiltroEstado"
+        - $ref: "#/components/parameters/FiltroSentido"
+        - $ref: "#/components/parameters/OrdenSort"
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Página de órdenes del activo con metadata
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListadoOrdenes"
+              example:
+                page: 1
+                limit: 20
+                total: 2
+                data:
+                  - { id: 1, activoId: 1, sentido: venta, cantidad: 10, precioLimite: 70, validaHasta: "2026-11-30", estado: viva, motivo: Toma parcial de ganancia, activo: { id: 1, ticker: KO } }
+                  - { id: 2, activoId: 1, sentido: compra, cantidad: 40, precioLimite: 55, validaHasta: "2026-10-20", estado: ejecutada, motivo: Armado de la posición, activo: { id: 1, ticker: KO } }
+        "400":
+          $ref: "#/components/responses/ErrorValidacion"
+        "404":
+          $ref: "#/components/responses/ActivoNoEncontrado"
+
+  /ordenes:
+    get:
+      tags: [Órdenes]
+      summary: Listar órdenes (filtros, orden y paginación)
+      operationId: listarOrdenes
+      parameters:
+        - $ref: "#/components/parameters/FiltroEstado"
+        - $ref: "#/components/parameters/FiltroSentido"
+        - name: activoId
+          in: query
+          description: Filtra por activo
+          schema:
+            type: integer
+            minimum: 1
+        - $ref: "#/components/parameters/OrdenSort"
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Página de órdenes con metadata; cada orden trae el resumen de su activo
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListadoOrdenes"
+              example:
+                page: 1
+                limit: 20
+                total: 3
+                data:
+                  - { id: 1, activoId: 1, sentido: venta, cantidad: 10, precioLimite: 70, validaHasta: "2026-11-30", estado: viva, motivo: Toma parcial de ganancia, activo: { id: 1, ticker: KO } }
+                  - { id: 2, activoId: 1, sentido: compra, cantidad: 40, precioLimite: 55, validaHasta: "2026-10-20", estado: ejecutada, motivo: Armado de la posición, activo: { id: 1, ticker: KO } }
+                  - { id: 3, activoId: 2, sentido: compra, cantidad: 10, precioLimite: 12.5, validaHasta: "2026-11-27", estado: viva, motivo: null, activo: { id: 2, ticker: AAPL } }
+        "400":
+          $ref: "#/components/responses/ErrorValidacion"
+    post:
+      tags: [Órdenes]
+      summary: Armar una orden (nace viva)
+      description: |
+        Reglas de negocio, en este orden:
+        **1** el activo existe (404 `ACTIVO_NO_ENCONTRADO`) ·
+        **4** solo se compra en nivel L2 o L3 (409 `NIVEL_NO_OPERABLE`) ·
+        **3** no hay otra orden viva con el mismo activo, sentido y precio (409 `ORDEN_DUPLICADA`) ·
+        **5** venta ≤ cartera − ventas vivas (409 `CANTIDAD_INSUFICIENTE`) ·
+        **6** compra: cartera + compras vivas + la nueva ≤ tope (409 `TOPE_EXCEDIDO`).
+        `estado` e `id` no se envían: si vienen, se ignoran.
+      operationId: crearOrden
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OrdenCreate"
+            examples:
+              compra:
+                summary: Compra de AAPL (nivel L2, entra en el tope)
+                value: { activoId: 2, sentido: compra, cantidad: 5, precioLimite: 12, validaHasta: "2026-12-15", motivo: Segunda tanda de compra }
+              venta:
+                summary: Venta de KO (hay CEDEARs disponibles)
+                value: { activoId: 1, sentido: venta, cantidad: 5, precioLimite: 80, validaHasta: "2026-12-15" }
+              duplicada:
+                summary: Repite la orden 3 (da 409 ORDEN_DUPLICADA)
+                value: { activoId: 2, sentido: compra, cantidad: 1, precioLimite: 12.5, validaHasta: "2026-12-15" }
+              topeExcedido:
+                summary: Supera el tope de AAPL (da 409 TOPE_EXCEDIDO)
+                value: { activoId: 2, sentido: compra, cantidad: 100, precioLimite: 11, validaHasta: "2026-12-15" }
+              nivelNoOperable:
+                summary: Compra de GGAL en nivel L1 (da 409 NIVEL_NO_OPERABLE)
+                value: { activoId: 3, sentido: compra, cantidad: 1, precioLimite: 1000, validaHasta: "2026-12-15" }
+      responses:
+        "201":
+          description: Orden creada, en estado viva
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Orden"
+              example: { id: 4, activoId: 2, sentido: compra, cantidad: 5, precioLimite: 12, validaHasta: "2026-12-15", estado: viva, motivo: Segunda tanda de compra, activo: { id: 2, ticker: AAPL } }
+        "400":
+          $ref: "#/components/responses/ErrorValidacion"
+        "404":
+          $ref: "#/components/responses/ActivoNoEncontrado"
+        "409":
+          description: Una regla de negocio impide crearla (reglas 3, 4, 5 o 6)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              examples:
+                ordenDuplicada:
+                  summary: Regla 3
+                  value: { error: { code: ORDEN_DUPLICADA, message: Ya existe la orden viva 3 de compra de AAPL a 12.5 } }
+                nivelNoOperable:
+                  summary: Regla 4
+                  value: { error: { code: NIVEL_NO_OPERABLE, message: "No se puede comprar GGAL: está en nivel L1 y solo se compra en L2 o L3" } }
+                cantidadInsuficiente:
+                  summary: Regla 5
+                  value: { error: { code: CANTIDAD_INSUFICIENTE, message: "No se pueden vender 36 KO: hay 30 disponibles (40 en cartera − 10 en ventas vivas)" } }
+                topeExcedido:
+                  summary: Regla 6
+                  value: { error: { code: TOPE_EXCEDIDO, message: "Comprar 100 AAPL llevaría a 110 CEDEARs (0 en cartera + 10 en compras vivas + 100) y el tope es 30" } }
+
+  /ordenes/{id}:
+    parameters:
+      - $ref: "#/components/parameters/OrdenId"
+    get:
+      tags: [Órdenes]
+      summary: Obtener una orden por id
+      operationId: obtenerOrden
+      responses:
+        "200":
+          description: Orden encontrada, con el resumen de su activo
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Orden"
+              example: { id: 2, activoId: 1, sentido: compra, cantidad: 40, precioLimite: 55, validaHasta: "2026-10-20", estado: ejecutada, motivo: Armado de la posición, activo: { id: 1, ticker: KO } }
+        "400":
+          $ref: "#/components/responses/ErrorValidacion"
+        "404":
+          $ref: "#/components/responses/OrdenNoEncontrada"
+    put:
+      tags: [Órdenes]
+      summary: Modificar parcialmente una orden viva
+      description: |
+        Solo se editan `cantidad`, `precioLimite`, `validaHasta` y `motivo` (al menos uno). `activoId` y `sentido` no:
+        sería otra orden. Reglas: **7** no se modifica una orden ejecutada · **3** si cambia el precio, no duplica otra viva ·
+        **5/6** si cambia la cantidad, entra en lo disponible. En 3, 5 y 6 la propia orden no se cuenta.
+      operationId: actualizarOrden
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OrdenUpdate"
+            examples:
+              precio:
+                summary: Corregir el precio
+                value: { precioLimite: 71 }
+              validez:
+                summary: Extender la validez y anotar el motivo
+                value: { validaHasta: "2026-12-20", motivo: Sigue vigente la tesis }
+      responses:
+        "200":
+          description: Orden actualizada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Orden"
+              example: { id: 1, activoId: 1, sentido: venta, cantidad: 10, precioLimite: 71, validaHasta: "2026-11-30", estado: viva, motivo: Toma parcial de ganancia, activo: { id: 1, ticker: KO } }
+        "400":
+          $ref: "#/components/responses/ErrorValidacion"
+        "404":
+          $ref: "#/components/responses/OrdenNoEncontrada"
+        "409":
+          description: Una regla de negocio impide modificarla (reglas 3, 5, 6 o 7)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              examples:
+                ordenNoModificable:
+                  summary: Regla 7
+                  value: { error: { code: ORDEN_NO_MODIFICABLE, "message": "La orden 2 ya está ejecutada: no se puede modificar" } }
+                ordenDuplicada:
+                  summary: Regla 3
+                  value: { error: { code: ORDEN_DUPLICADA, message: Ya existe la orden viva 3 de compra de AAPL a 12.5 } }
+                cantidadInsuficiente:
+                  summary: Regla 5
+                  value: { error: { code: CANTIDAD_INSUFICIENTE, message: "No se pueden vender 46 KO: hay 40 disponibles (40 en cartera − 0 en ventas vivas)" } }
+                topeExcedido:
+                  summary: Regla 6
+                  value: { error: { code: TOPE_EXCEDIDO, message: "Comprar 25 AAPL llevaría a 35 CEDEARs (0 en cartera + 10 en compras vivas + 25) y el tope es 30" } }
+    delete:
+      tags: [Órdenes]
+      summary: Borrar una orden viva (es la forma de cancelarla)
+      operationId: eliminarOrden
+      responses:
+        "204":
+          description: Eliminada (sin cuerpo)
+        "400":
+          $ref: "#/components/responses/ErrorValidacion"
+        "404":
+          $ref: "#/components/responses/OrdenNoEncontrada"
+        "409":
+          description: La orden ya está ejecutada y es historial (regla de negocio 7)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                error: { code: ORDEN_NO_MODIFICABLE, "message": "La orden 2 ya está ejecutada: no se puede borrar" }
 
 components:
   parameters:
@@ -190,6 +426,52 @@ components:
         type: integer
         minimum: 1
         example: 1
+    OrdenId:
+      name: id
+      in: path
+      required: true
+      description: Id de la orden (entero positivo)
+      schema:
+        type: integer
+        minimum: 1
+        example: 1
+    FiltroEstado:
+      name: estado
+      in: query
+      description: Filtra por estado de la orden
+      schema:
+        $ref: "#/components/schemas/Estado"
+    FiltroSentido:
+      name: sentido
+      in: query
+      description: Filtra por sentido (compra o venta)
+      schema:
+        $ref: "#/components/schemas/Sentido"
+    OrdenSort:
+      name: sort
+      in: query
+      description: Campo de orden; con `-` adelante, descendente
+      schema:
+        type: string
+        pattern: '^-?(id|activoId|sentido|cantidad|precioLimite|validaHasta|estado)$'
+        example: -precioLimite
+    Page:
+      name: page
+      in: query
+      description: Número de página (desde 1)
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+    Limit:
+      name: limit
+      in: query
+      description: Tamaño de página (máximo 100)
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
 
   responses:
     ErrorValidacion:
@@ -213,6 +495,14 @@ components:
             $ref: "#/components/schemas/Error"
           example:
             error: { code: ACTIVO_NO_ENCONTRADO, message: No existe un activo con id 999 }
+    OrdenNoEncontrada:
+      description: No existe una orden con ese id
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            error: { code: ORDEN_NO_ENCONTRADA, message: No existe una orden con id 999 }
 
   schemas:
     Mercado:
@@ -246,7 +536,8 @@ components:
           $ref: "#/components/schemas/Mercado"
         ratio:
           type: number
-          exclusiveMinimum: 0
+          minimum: 0
+          exclusiveMinimum: true
           description: CEDEARs por acción del subyacente (en BYMA, 1)
           example: 5
         nivel:
@@ -280,7 +571,8 @@ components:
           $ref: "#/components/schemas/Mercado"
         ratio:
           type: number
-          exclusiveMinimum: 0
+          minimum: 0
+          exclusiveMinimum: true
           example: 30
         nivel:
           $ref: "#/components/schemas/Nivel"
@@ -308,7 +600,8 @@ components:
           $ref: "#/components/schemas/Mercado"
         ratio:
           type: number
-          exclusiveMinimum: 0
+          minimum: 0
+          exclusiveMinimum: true
         nivel:
           $ref: "#/components/schemas/Nivel"
         cantidad:
@@ -337,6 +630,135 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/Activo"
+
+    Sentido:
+      type: string
+      enum: [compra, venta]
+
+    Estado:
+      type: string
+      enum: [viva, ejecutada]
+      description: Toda orden nace `viva`; `ejecutada` es historial (no se modifica ni se borra)
+
+    ActivoResumen:
+      type: object
+      description: Resumen del activo de la orden, leído de la relación (no se guarda copia en la orden)
+      required: [id, ticker]
+      properties:
+        id:
+          type: integer
+          example: 1
+        ticker:
+          type: string
+          example: KO
+
+    Orden:
+      type: object
+      required: [id, activoId, sentido, cantidad, precioLimite, validaHasta, estado, motivo, activo]
+      properties:
+        id:
+          type: integer
+          description: Identificador autoincremental
+          example: 1
+        activoId:
+          type: integer
+          description: Clave foránea al activo (relación Activo 1:N Orden)
+          example: 1
+        sentido:
+          $ref: "#/components/schemas/Sentido"
+        cantidad:
+          type: integer
+          minimum: 1
+          description: CEDEARs a comprar o vender
+          example: 10
+        precioLimite:
+          type: number
+          minimum: 0
+          exclusiveMinimum: true
+          description: Precio límite en US$ por CEDEAR
+          example: 70
+        validaHasta:
+          type: string
+          format: date
+          description: Último día de validez (AAAA-MM-DD)
+          example: "2026-11-30"
+        estado:
+          $ref: "#/components/schemas/Estado"
+        motivo:
+          type: string
+          nullable: true
+          maxLength: 400
+          example: Toma parcial de ganancia
+        activo:
+          $ref: "#/components/schemas/ActivoResumen"
+
+    OrdenCreate:
+      type: object
+      description: Cuerpo de `POST /ordenes`. El `id` lo asigna el servidor y el `estado` siempre arranca en `viva`.
+      required: [activoId, sentido, cantidad, precioLimite, validaHasta]
+      properties:
+        activoId:
+          type: integer
+          minimum: 1
+          example: 2
+        sentido:
+          $ref: "#/components/schemas/Sentido"
+        cantidad:
+          type: integer
+          minimum: 1
+          example: 5
+        precioLimite:
+          type: number
+          minimum: 0
+          exclusiveMinimum: true
+          example: 12
+        validaHasta:
+          type: string
+          format: date
+          example: "2026-12-15"
+        motivo:
+          type: string
+          maxLength: 400
+          example: Segunda tanda de compra
+
+    OrdenUpdate:
+      type: object
+      description: Cuerpo de `PUT /ordenes/{id}`. Todos opcionales, pero debe venir al menos uno.
+      minProperties: 1
+      properties:
+        cantidad:
+          type: integer
+          minimum: 1
+        precioLimite:
+          type: number
+          minimum: 0
+          exclusiveMinimum: true
+        validaHasta:
+          type: string
+          format: date
+        motivo:
+          type: string
+          maxLength: 400
+
+    ListadoOrdenes:
+      type: object
+      description: Respuesta paginada
+      required: [page, limit, total, data]
+      properties:
+        page:
+          type: integer
+          example: 1
+        limit:
+          type: integer
+          example: 20
+        total:
+          type: integer
+          description: Cantidad de órdenes que cumplen los filtros (antes de paginar)
+          example: 3
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Orden"
 
     Error:
       type: object
