@@ -1,5 +1,7 @@
 ### Pruebas manuales (extensión REST Client de VS Code). Servidor: npm run dev
 ### Documentación interactiva: http://localhost:8000/api-docs
+### Correrlos EN ORDEN con el servidor recién arrancado (la persistencia en memoria vuelve a la semilla al reiniciar).
+### Los pedidos con "# @name" guardan su respuesta: los siguientes usan el id creado ({{nombre.response.body.$.id}}).
 
 @base = http://localhost:8000
 
@@ -40,6 +42,7 @@ Content-Type: application/json
 }
 
 ### 7. Crear activo válido sin cantidad → 201, cantidad 0 por defecto, ticker normalizado a mayúsculas
+# @name msft
 POST {{base}}/activos
 Content-Type: application/json
 
@@ -128,11 +131,221 @@ GET {{base}}/activos?sort=precio
 ### 20. limit mayor a 100 → 400 VALIDATION_ERROR (query)
 GET {{base}}/activos?limit=500
 
-### 21. Eliminar un activo → 204
-DELETE {{base}}/activos/2
+### 21. Eliminar un activo sin órdenes (el MSFT creado en el caso 7) → 204
+DELETE {{base}}/activos/{{msft.response.body.$.id}}
 
 ### 22. Eliminar el mismo activo de nuevo → 404
-DELETE {{base}}/activos/2
+DELETE {{base}}/activos/{{msft.response.body.$.id}}
 
 ### 23. Ruta inexistente → 404 ROUTE_NOT_FOUND
 GET {{base}}/cualquier-cosa
+
+### ===================== ÓRDENES =====================
+### Semilla: 1 = KO venta 10 @ 70 viva · 2 = KO compra 40 @ 55 EJECUTADA · 3 = AAPL compra 10 @ 12.5 viva
+### Activos en este punto: KO L3, 45 en cartera (caso 13), tope 100 · AAPL L2, 0 en cartera, tope 30
+
+### 24. Listar órdenes → 200 con { page, limit, total, data }; cada orden trae su activo anidado { id, ticker }
+GET {{base}}/ordenes
+
+### 25. Filtrar por estado y sentido → 200 (solo la 3)
+GET {{base}}/ordenes?estado=viva&sentido=compra
+
+### 26. Órdenes de un activo, por precio descendente, paginadas → 200 (total 2, una por página)
+GET {{base}}/ordenes?activoId=1&sort=-precioLimite&page=1&limit=1
+
+### 27. Obtener una orden por id → 200 (la ejecutada de la semilla)
+GET {{base}}/ordenes/2
+
+### 28. Orden inexistente → 404 ORDEN_NO_ENCONTRADA
+GET {{base}}/ordenes/999
+
+### 29. Filtro con valor fuera del enum → 400 VALIDATION_ERROR (query)
+GET {{base}}/ordenes?estado=cancelada
+
+### 30. Crear orden válida → 201, nace "viva" (el estado y el id del body se ignoran)
+# @name nuevaOrden
+POST {{base}}/ordenes
+Content-Type: application/json
+
+{
+  "activoId": 2,
+  "sentido": "compra",
+  "cantidad": 5,
+  "precioLimite": 12,
+  "validaHasta": "2026-12-15",
+  "motivo": "Segunda tanda de compra",
+  "estado": "ejecutada",
+  "id": 77
+}
+
+### 31. Crear con valores inválidos → 400 VALIDATION_ERROR con details (sentido, cantidad, precioLimite, validaHasta)
+POST {{base}}/ordenes
+Content-Type: application/json
+
+{
+  "activoId": 1,
+  "sentido": "short",
+  "cantidad": 0,
+  "precioLimite": -3,
+  "validaHasta": "2026-02-30"
+}
+
+### 32. REGLA 1 — el activo de la orden no existe → 404 ACTIVO_NO_ENCONTRADO
+POST {{base}}/ordenes
+Content-Type: application/json
+
+{
+  "activoId": 999,
+  "sentido": "compra",
+  "cantidad": 1,
+  "precioLimite": 10,
+  "validaHasta": "2026-12-15"
+}
+
+### 33. (preparación de la regla 4) Activo en nivel L1, solo seguimiento → 201
+# @name activoL1
+POST {{base}}/activos
+Content-Type: application/json
+
+{
+  "ticker": "VIST",
+  "nombre": "Vista Energy",
+  "mercado": "NYSE",
+  "ratio": 3,
+  "nivel": "L1",
+  "topeCedears": 50
+}
+
+### 34. REGLA 4 — comprar un activo de nivel L1 → 409 NIVEL_NO_OPERABLE
+POST {{base}}/ordenes
+Content-Type: application/json
+
+{
+  "activoId": {{activoL1.response.body.$.id}},
+  "sentido": "compra",
+  "cantidad": 1,
+  "precioLimite": 10,
+  "validaHasta": "2026-12-15"
+}
+
+### 35. REGLA 3 — misma orden viva (activo, sentido y precio de la 3) → 409 ORDEN_DUPLICADA
+POST {{base}}/ordenes
+Content-Type: application/json
+
+{
+  "activoId": 2,
+  "sentido": "compra",
+  "cantidad": 1,
+  "precioLimite": 12.5,
+  "validaHasta": "2026-12-15"
+}
+
+### 36. REGLA 5 — vender más de lo disponible (KO: 45 en cartera − 10 en ventas vivas = 35) → 409 CANTIDAD_INSUFICIENTE
+POST {{base}}/ordenes
+Content-Type: application/json
+
+{
+  "activoId": 1,
+  "sentido": "venta",
+  "cantidad": 36,
+  "precioLimite": 80,
+  "validaHasta": "2026-12-15"
+}
+
+### 37. REGLA 6 — comprar por encima del tope (AAPL: 0 + 15 en compras vivas + 16 = 31 > 30) → 409 TOPE_EXCEDIDO
+POST {{base}}/ordenes
+Content-Type: application/json
+
+{
+  "activoId": 2,
+  "sentido": "compra",
+  "cantidad": 16,
+  "precioLimite": 11,
+  "validaHasta": "2026-12-15"
+}
+
+### 38. Modificar parcialmente (precio) → 200
+PUT {{base}}/ordenes/{{nuevaOrden.response.body.$.id}}
+Content-Type: application/json
+
+{
+  "precioLimite": 13
+}
+
+### 39. REGLA 3 al editar — llevar el precio al de otra orden viva (la 3, a 12.5) → 409 ORDEN_DUPLICADA
+PUT {{base}}/ordenes/{{nuevaOrden.response.body.$.id}}
+Content-Type: application/json
+
+{
+  "precioLimite": 12.5
+}
+
+### 40. REGLA 6 al editar — su propia cantidad no se cuenta: 0 + 10 (la 3) + 21 = 31 > 30 → 409 TOPE_EXCEDIDO
+PUT {{base}}/ordenes/{{nuevaOrden.response.body.$.id}}
+Content-Type: application/json
+
+{
+  "cantidad": 21
+}
+
+### 41. REGLA 5 al editar — la venta 1 a 46 (KO: 45 en cartera, su propio 10 no se cuenta) → 409 CANTIDAD_INSUFICIENTE
+PUT {{base}}/ordenes/1
+Content-Type: application/json
+
+{
+  "cantidad": 46
+}
+
+### 42. REGLA 7 — modificar una orden ejecutada → 409 ORDEN_NO_MODIFICABLE
+PUT {{base}}/ordenes/2
+Content-Type: application/json
+
+{
+  "motivo": "Corregir el historial"
+}
+
+### 43. REGLA 7 — borrar una orden ejecutada → 409 ORDEN_NO_MODIFICABLE
+DELETE {{base}}/ordenes/2
+
+### 44. Modificar con campos no editables (activoId, sentido) → 400 (se descartan y no queda ninguno)
+PUT {{base}}/ordenes/1
+Content-Type: application/json
+
+{
+  "sentido": "compra",
+  "activoId": 2
+}
+
+### 45. Modificar una orden inexistente → 404 ORDEN_NO_ENCONTRADA
+PUT {{base}}/ordenes/999
+Content-Type: application/json
+
+{
+  "cantidad": 1
+}
+
+### 46. Borrar una orden viva (es la forma de cancelarla) → 204
+DELETE {{base}}/ordenes/{{nuevaOrden.response.body.$.id}}
+
+### 47. Borrar la misma orden de nuevo → 404 ORDEN_NO_ENCONTRADA
+DELETE {{base}}/ordenes/{{nuevaOrden.response.body.$.id}}
+
+### ===================== RELACIÓN ACTIVO 1:N ORDEN =====================
+
+### 48. REGLA 8 — borrar un activo con órdenes (KO: una viva y una ejecutada) → 409 ACTIVO_CON_ORDENES
+DELETE {{base}}/activos/1
+
+### 49. Órdenes de un activo → 200 { page, limit, total, data } (las 2 de KO)
+GET {{base}}/activos/1/ordenes
+
+### 50. Órdenes de un activo filtradas por estado → 200 (solo la viva)
+GET {{base}}/activos/1/ordenes?estado=viva
+
+### 51. Activo sin órdenes → 200 con total 0 y data vacía
+GET {{base}}/activos/{{activoL1.response.body.$.id}}/ordenes
+
+### 52. Ese activo sin órdenes sí se puede borrar → 204 (la regla 8 no lo bloquea)
+DELETE {{base}}/activos/{{activoL1.response.body.$.id}}
+
+### 53. Órdenes de un activo inexistente → 404 ACTIVO_NO_ENCONTRADO
+GET {{base}}/activos/999/ordenes
