@@ -6,6 +6,7 @@ import {
   queryActivosSchema,
   activoIdParamSchema,
 } from "../schemas/activoSchema.js";
+import { queryOrdenesDeActivoSchema } from "../schemas/ordenSchema.js";
 
 /**
  * Router de Activos.
@@ -21,6 +22,8 @@ function createActivosRouter(controller) {
   router.post("/", validate(createActivoSchema), controller.create);
   router.put("/:id", validateParams(activoIdParamSchema), validate(updateActivoSchema), controller.update);
   router.delete("/:id", validateParams(activoIdParamSchema), controller.remove);
+  // Relación Activo 1:N Orden: las órdenes de un activo (filtros de Órdenes, sin activoId porque va en la ruta)
+  router.get("/:id/ordenes", validateParams(activoIdParamSchema), validateQuery(queryOrdenesDeActivoSchema), controller.listOrdenes);
 
   return router;
 }
