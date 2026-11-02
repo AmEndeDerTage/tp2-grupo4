@@ -26,6 +26,12 @@ class OrdenesController {
     if (!orden) throw new AppError("ORDEN_NO_ENCONTRADA", `No existe una orden con id ${req.params.id}`, 404);
     res.json(orden);
   };
+
+  // POST /ordenes → 201 (las reglas de negocio las aplica el caso de uso; si alguna falla, el AppError llega al errorHandler)
+  create = async (req, res) => {
+    const orden = await this.#useCases.createOrden(req.body);
+    res.status(201).json(orden);
+  };
 }
 
 // Se exporta la clase, no una instancia: quien la instancia (con los casos de uso inyectados) es el container

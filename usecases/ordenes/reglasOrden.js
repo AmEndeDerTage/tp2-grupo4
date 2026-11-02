@@ -1,0 +1,88 @@
+import AppError from "../../errors/AppError.js";
+
+/**
+ * Reglas de negocio de Órdenes, escritas UNA sola vez y reutilizadas por los casos de uso
+ * (createOrden, updateOrden y, más adelante, la ejecución). Cada función verifica una regla y,
+ * si no se cumple, lanza un AppError con su código; si se cumple, no hace nada (o devuelve lo que buscó).
+ * No conocen HTTP ni ninguna implementación concreta de DAO: reciben los DAOs por parámetro.
+ */
+
+// Niveles en los que se permite comprar: L2 = lista para comprar, L3 = con posición (regla 4)
+const NIVELES_COMPRABLES = ["L2", "L3"];
+
+/**
+ * Regla 1: el activo de la orden tiene que existir (ACTIVO_NO_ENCONTRADO, 404).
+ * Devuelve el activo, porque las demás reglas lo necesitan (nivel, cantidad, tope).
+ */
+async function obtenerActivoDeLaOrden(activoId, activosDao) {
+  const activo = await activosDao.getById(activoId);
+  if (!activo) {
+    throw new AppError("ACTIVO_NO_ENCONTRADO", `No existe un activo con id ${activoId}`, 404);
+  }
+  return activo;
+}
+
+/**
+ * Las órdenes VIVAS del mismo activo y sentido, sin contar `excluirId` (la propia orden, al editarla).
+ * Es la base de las reglas 3, 5 y 6: lo ya ejecutado está en `activo.cantidad`; lo vivo es lo comprometido.
+ */
+async function ordenesVivasDelMismoLado(ordenesDao, activoId, sentido, excluirId) {
+  const { items } = await ordenesDao.getAll({ activoId, sentido, estado: "viva" });
+  return items.filter((o) => o.id !== excluirId);
+}
+
+/** Regla 4: solo se compra en activos de nivel L2 o L3 (NIVEL_NO_OPERABLE, 409). Vender no depende del nivel. */
+function verificarNivelOperable(activo, sentido) {
+  if (sentido === "compra" && !NIVELES_COMPRABLES.includes(activo.nivel)) {
+    throw new AppError(
+      "NIVEL_NO_OPERABLE",
+      `No se puede comprar ${activo.ticker}: está en nivel ${activo.nivel} y solo se compra en ${NIVELES_COMPRABLES.join(" o ")}`,
+      409
+    );
+  }
+}
+
+/** Regla 3: no puede haber dos órdenes vivas con el mismo activo, sentido y precio (ORDEN_DUPLICADA, 409). */
+function verificarNoDuplicada(vivasDelMismoLado, precioLimite, activo, sentido) {
+  const duplicada = vivasDelMismoLado.find((o) => o.precioLimite === precioLimite);
+  if (duplicada) {
+    throw new AppError(
+      "ORDEN_DUPLICADA",
+      `Ya existe la orden viva ${duplicada.id} de ${sentido} de ${activo.ticker} a ${precioLimite}`,
+      409
+    );
+  }
+}
+
+/**
+ * Reglas 5 y 6: que la cantidad entre en lo que queda disponible.
+ *  - venta (regla 5): cantidad ≤ cartera − Σ ventas vivas (CANTIDAD_INSUFICIENTE, 409)
+ *  - compra (regla 6): cartera + Σ compras vivas + cantidad ≤ topeCedears (TOPE_EXCEDIDO, 409)
+ * `vivasDelMismoLado` ya viene sin la propia orden cuando se está editando.
+ */
+function verificarCupo(activo, sentido, cantidad, vivasDelMismoLado) {
+  const comprometido = vivasDelMismoLado.reduce((suma, o) => suma + o.cantidad, 0);
+
+  if (sentido === "venta") {
+    const disponible = activo.cantidad - comprometido;
+    if (cantidad > disponible) {
+      throw new AppError(
+        "CANTIDAD_INSUFICIENTE",
+        `No se pueden vender ${cantidad} ${activo.ticker}: hay ${disponible} disponibles (${activo.cantidad} en cartera − ${comprometido} en ventas vivas)`,
+        409
+      );
+    }
+    return;
+  }
+
+  const total = activo.cantidad + comprometido + cantidad;
+  if (total > activo.topeCedears) {
+    throw new AppError(
+      "TOPE_EXCEDIDO",
+      `Comprar ${cantidad} ${activo.ticker} llevaría a ${total} CEDEARs (${activo.cantidad} en cartera + ${comprometido} en compras vivas + ${cantidad}) y el tope es ${activo.topeCedears}`,
+      409
+    );
+  }
+}
+
+export { NIVELES_COMPRABLES, obtenerActivoDeLaOrden, ordenesVivasDelMismoLado, verificarNivelOperable, verificarNoDuplicada, verificarCupo };

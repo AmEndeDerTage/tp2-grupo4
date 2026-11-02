@@ -1,5 +1,6 @@
 import getOrdenes from "./getOrdenes.js";
 import getOrdenById from "./getOrdenById.js";
+import createOrden from "./createOrden.js";
 
 /**
  * Factory de casos de uso de Órdenes.
@@ -12,6 +13,7 @@ function makeOrdenUseCases({ ordenesDao, activosDao }) {
   return {
     getOrdenes: (filtros) => getOrdenes(filtros, ordenesDao),
     getOrdenById: (id) => getOrdenById(id, ordenesDao),
+    createOrden: (data) => createOrden(data, ordenesDao, activosDao),
   };
 }
 
