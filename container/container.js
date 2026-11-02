@@ -1,8 +1,11 @@
 import { Router } from "express";
-import { getActivosDao } from "../dao/daoFactory.js";
+import { getActivosDao, getOrdenesDao } from "../dao/daoFactory.js";
 import makeActivoUseCases from "../usecases/activos/makeActivoUseCases.js";
 import ActivosController from "../controllers/ActivosController.js";
 import createActivosRouter from "../routes/activosRoutes.js";
+import makeOrdenUseCases from "../usecases/ordenes/makeOrdenUseCases.js";
+import OrdenesController from "../controllers/OrdenesController.js";
+import createOrdenesRouter from "../routes/ordenesRoutes.js";
 import createDocsRouter from "../docs/swaggerRouter.js";
 
 /**
@@ -18,16 +21,25 @@ async function buildContainer() {
   if (typeof activosDao.init === "function") {
     await activosDao.init();
   }
+  // Órdenes: el lado "N" de la relación Activo 1:N Orden
+  const ordenesDao = getOrdenesDao();
+  if (typeof ordenesDao.init === "function") {
+    await ordenesDao.init();
+  }
 
   // 2. Casos de uso con sus dependencias inyectadas
   const activoUseCases = makeActivoUseCases(activosDao);
+  // Las reglas de Órdenes miran el activo de cada orden: por eso reciben también el DAO de Activos
+  const ordenUseCases = makeOrdenUseCases({ ordenesDao, activosDao });
 
   // 3. Controladores con los casos de uso inyectados
   const activosController = new ActivosController(activoUseCases);
+  const ordenesController = new OrdenesController(ordenUseCases);
 
   // 4. Routers con los controladores inyectados, montados en el router principal
   const router = Router();
   router.use("/activos", createActivosRouter(activosController));
+  router.use("/ordenes", createOrdenesRouter(ordenesController));
 
   // Documentación interactiva (OpenAPI + Swagger UI): un recurso HTTP más de la API
   router.use("/api-docs", createDocsRouter());
