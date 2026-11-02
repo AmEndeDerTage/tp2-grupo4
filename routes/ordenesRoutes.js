@@ -1,6 +1,6 @@
 import { Router } from "express";
 import validate, { validateQuery, validateParams } from "../middlewares/validate.js";
-import { createOrdenSchema, queryOrdenesSchema, ordenIdParamSchema } from "../schemas/ordenSchema.js";
+import { createOrdenSchema, updateOrdenSchema, queryOrdenesSchema, ordenIdParamSchema } from "../schemas/ordenSchema.js";
 
 /**
  * Router de Órdenes.
@@ -14,6 +14,8 @@ function createOrdenesRouter(controller) {
   router.get("/", validateQuery(queryOrdenesSchema), controller.list);
   router.get("/:id", validateParams(ordenIdParamSchema), controller.get);
   router.post("/", validate(createOrdenSchema), controller.create);
+  router.put("/:id", validateParams(ordenIdParamSchema), validate(updateOrdenSchema), controller.update);
+  router.delete("/:id", validateParams(ordenIdParamSchema), controller.remove);
 
   return router;
 }

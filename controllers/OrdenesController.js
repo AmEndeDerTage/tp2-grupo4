@@ -32,6 +32,20 @@ class OrdenesController {
     const orden = await this.#useCases.createOrden(req.body);
     res.status(201).json(orden);
   };
+
+  // PUT /ordenes/:id (parcial: cantidad, precioLimite, validaHasta, motivo)
+  update = async (req, res) => {
+    const orden = await this.#useCases.updateOrden(req.params.id, req.body);
+    if (!orden) throw new AppError("ORDEN_NO_ENCONTRADA", `No existe una orden con id ${req.params.id}`, 404);
+    res.json(orden);
+  };
+
+  // DELETE /ordenes/:id → 204 sin cuerpo
+  remove = async (req, res) => {
+    const borrada = await this.#useCases.deleteOrden(req.params.id);
+    if (!borrada) throw new AppError("ORDEN_NO_ENCONTRADA", `No existe una orden con id ${req.params.id}`, 404);
+    res.status(204).send();
+  };
 }
 
 // Se exporta la clase, no una instancia: quien la instancia (con los casos de uso inyectados) es el container
