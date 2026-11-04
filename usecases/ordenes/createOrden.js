@@ -1,3 +1,4 @@
+import { TOPE_CERCA_PCT } from "../../config/config.js";
 import EVENTS from "../../events/eventNames.js";
 import {
   obtenerActivoDeLaOrden,
@@ -5,6 +6,7 @@ import {
   verificarNivelOperable,
   verificarNoDuplicada,
   verificarCupo,
+  evaluarTopeCerca,
 } from "./reglasOrden.js";
 
 /**
@@ -16,10 +18,13 @@ import {
  *   3. no duplica una orden viva              → ORDEN_DUPLICADA (409)
  *   5/6. la cantidad entra en lo disponible   → CANTIDAD_INSUFICIENTE / TOPE_EXCEDIDO (409)
  *
- * Después de guardar, anuncia lo que pasó por el bus `events`: orden.creada (alguien tiene que colocarla
- * a mano en el broker). No sabe quién escucha ni por dónde se avisa. Se emite DESPUÉS de guardar: no se
- * anuncia algo que todavía puede fallar. El payload es un objeto plano armado acá, con el ticker ya resuelto
- * (el activo se cargó para la regla 1): el listener no necesita ningún DAO.
+ * Después de guardar, anuncia lo que pasó por el bus `events` (efectos secundarios desacoplados):
+ *  - orden.creada, siempre: alguien tiene que colocarla a mano en el broker
+ *  - activo.topeCerca, si es una compra que deja lo comprometido en TOPE_CERCA_PCT % o más del tope
+ * No sabe quién escucha ni por dónde se avisa. Se emite DESPUÉS de guardar: no se anuncia algo que todavía puede fallar.
+ * Los payloads son objetos planos armados acá, con el ticker ya resuelto (el activo se cargó para la regla 1):
+ * el listener no necesita ningún DAO.
+ * Leer el umbral de config acá está bien (es parte de la regla: cuándo avisar); instanciar un notificador, no (es el canal).
  */
 async function createOrden(data, ordenesDao, activosDao, events) {
   const activo = await obtenerActivoDeLaOrden(data.activoId, activosDao);
@@ -39,6 +44,11 @@ async function createOrden(data, ordenesDao, activosDao, events) {
     precioLimite: creada.precioLimite,
     validaHasta: creada.validaHasta,
   });
+
+  if (creada.sentido === "compra") {
+    const topeCerca = evaluarTopeCerca(activo, vivas, creada.cantidad, TOPE_CERCA_PCT);
+    if (topeCerca) events.emit(EVENTS.ACTIVO_TOPE_CERCA, topeCerca);
+  }
 
   return creada;
 }

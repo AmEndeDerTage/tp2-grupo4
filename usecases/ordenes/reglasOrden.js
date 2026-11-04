@@ -85,4 +85,35 @@ function verificarCupo(activo, sentido, cantidad, vivasDelMismoLado) {
   }
 }
 
-export { NIVELES_COMPRABLES, obtenerActivoDeLaOrden, ordenesVivasDelMismoLado, verificarNivelOperable, verificarNoDuplicada, verificarCupo };
+/**
+ * Regla del aviso activo.topeCerca (no rechaza nada: decide si hay que avisar).
+ * Para una compra que ya pasó la regla 6: si lo comprometido (cartera + compras vivas, incluida esta)
+ * llega al `umbralPct` % del tope, devuelve el payload del evento; si no, `null`.
+ * El umbral llega por parámetro (el caso de uso lo lee de config) para que la función sea pura y testeable.
+ */
+function evaluarTopeCerca(activo, vivasDelMismoLado, cantidad, umbralPct) {
+  const enComprasVivas = vivasDelMismoLado.reduce((suma, o) => suma + o.cantidad, 0) + cantidad;
+  const comprometido = activo.cantidad + enComprasVivas;
+  if (comprometido * 100 < umbralPct * activo.topeCedears) return null;
+
+  return {
+    activoId: activo.id,
+    ticker: activo.ticker,
+    cartera: activo.cantidad,
+    enComprasVivas,
+    comprometido,
+    topeCedears: activo.topeCedears,
+    pct: Math.round((comprometido * 1000) / activo.topeCedears) / 10,
+    umbralPct,
+  };
+}
+
+export {
+  NIVELES_COMPRABLES,
+  obtenerActivoDeLaOrden,
+  ordenesVivasDelMismoLado,
+  verificarNivelOperable,
+  verificarNoDuplicada,
+  verificarCupo,
+  evaluarTopeCerca,
+};
