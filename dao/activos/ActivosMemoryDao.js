@@ -1,3 +1,5 @@
+import { SEMILLA_ACTIVOS } from "../semilla.js";
+
 /**
  * Adaptador DAO en memoria para Activos.
  * Guarda los activos en un array privado. Todos los métodos son `async` para que la firma sea la misma
@@ -5,19 +7,12 @@
  * Devuelve siempre copias ({ ...x }): nadie de afuera puede modificar el estado interno por accidente.
  */
 
-// Semilla de ejemplo (datos inventados): un activo con posición (L3), uno listo para comprar (L2) y uno en seguimiento (L1)
-const SEMILLA = [
-  { id: 1, ticker: "KO", nombre: "Coca-Cola", mercado: "NYSE", ratio: 5, nivel: "L3", cantidad: 40, topeCedears: 100 },
-  { id: 2, ticker: "AAPL", nombre: "Apple", mercado: "NASDAQ", ratio: 20, nivel: "L2", cantidad: 0, topeCedears: 30 },
-  { id: 3, ticker: "GGAL", nombre: "Grupo Financiero Galicia", mercado: "BYMA", ratio: 1, nivel: "L1", cantidad: 0, topeCedears: 50 },
-];
-
 class ActivosMemoryDao {
   // Campos privados (ES2022): no se pueden leer ni modificar desde fuera de la clase
   #activos;
   #nextId;
 
-  constructor(activosIniciales = SEMILLA) {
+  constructor(activosIniciales = SEMILLA_ACTIVOS) {
     this.#activos = activosIniciales.map((a) => ({ ...a }));
     this.#nextId = this.#activos.reduce((max, a) => (a.id > max ? a.id : max), 0) + 1;
   }

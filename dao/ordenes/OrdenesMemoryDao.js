@@ -1,3 +1,4 @@
+import { SEMILLA_ORDENES } from "../semilla.js";
 import activosMemoryDao from "../activos/ActivosMemoryDao.js";
 
 /**
@@ -9,21 +10,13 @@ import activosMemoryDao from "../activos/ActivosMemoryDao.js";
  * Devuelve siempre copias: nadie de afuera puede modificar el estado interno por accidente.
  */
 
-// Semilla de ejemplo (datos inventados). La orden 2 ya está ejecutada (es la compra que explica los 40 KO en cartera):
-// sirve para probar que una orden ejecutada no se modifica ni se borra, antes de que exista el endpoint de ejecución.
-const SEMILLA = [
-  { id: 1, activoId: 1, sentido: "venta", cantidad: 10, precioLimite: 70, validaHasta: "2026-11-30", estado: "viva", motivo: "Toma parcial de ganancia" },
-  { id: 2, activoId: 1, sentido: "compra", cantidad: 40, precioLimite: 55, validaHasta: "2026-10-20", estado: "ejecutada", motivo: "Armado de la posición" },
-  { id: 3, activoId: 2, sentido: "compra", cantidad: 10, precioLimite: 12.5, validaHasta: "2026-11-27", estado: "viva", motivo: null },
-];
-
 class OrdenesMemoryDao {
   // Campos privados (ES2022): no se pueden leer ni modificar desde fuera de la clase
   #ordenes;
   #nextId;
   #activosDao;
 
-  constructor(activosDao = activosMemoryDao, ordenesIniciales = SEMILLA) {
+  constructor(activosDao = activosMemoryDao, ordenesIniciales = SEMILLA_ORDENES) {
     this.#activosDao = activosDao;
     this.#ordenes = ordenesIniciales.map((o) => ({ ...o }));
     this.#nextId = this.#ordenes.reduce((max, o) => (o.id > max ? o.id : max), 0) + 1;
