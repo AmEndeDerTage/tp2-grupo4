@@ -10,7 +10,7 @@ import { z } from "zod";
 const SENTIDOS = ["compra", "venta"];
 const ESTADOS = ["viva", "ejecutada"];
 
-// Columnas por las que se puede ordenar: el DAO las usa tal cual (en SQL irán al ORDER BY)
+// Columnas por las que se puede ordenar: el DAO las usa tal cual (en SQL van al ORDER BY)
 const CAMPOS_ORDENABLES = ["id", "activoId", "sentido", "cantidad", "precioLimite", "validaHasta", "estado"];
 
 // Cada campo se define una sola vez y se reutiliza en los esquemas de creación, actualización y consulta

@@ -1,6 +1,8 @@
 ### Pruebas manuales (extensión REST Client de VS Code). Servidor: npm run dev
 ### Documentación interactiva: http://localhost:8000/api-docs
-### Correrlos EN ORDEN con el servidor recién arrancado (la persistencia en memoria vuelve a la semilla al reiniciar).
+### Correrlos EN ORDEN con el servidor recién arrancado y los datos en la semilla: en memoria alcanza con reiniciar;
+### en sequelize los datos sobreviven al reinicio, así que antes hay que parar el servidor y borrar database.sqlite.
+### Los 53 casos dan lo mismo en los dos modos (PERSISTENCE_TYPE en .env).
 ### Los pedidos con "# @name" guardan su respuesta: los siguientes usan el id creado ({{nombre.response.body.$.id}}).
 
 @base = http://localhost:8000

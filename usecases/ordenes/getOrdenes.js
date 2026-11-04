@@ -1,6 +1,6 @@
 /**
  * Caso de uso: listar órdenes con filtros, orden y paginación.
- * Los filtros los resuelve el DAO (en SQL serán WHERE / ORDER BY / LIMIT); acá solo se arma
+ * Los filtros los resuelve el DAO (en SQL: WHERE / ORDER BY / LIMIT); acá solo se arma
  * la respuesta paginada con metadata: { page, limit, total, data }, igual que en Activos.
  */
 async function getOrdenes(filtros = {}, ordenesDao) {

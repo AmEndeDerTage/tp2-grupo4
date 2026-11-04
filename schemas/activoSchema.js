@@ -9,7 +9,7 @@ import { z } from "zod";
 const MERCADOS = ["NYSE", "NASDAQ", "BYMA"];
 const NIVELES = ["L0", "L1", "L2", "L3"];
 
-// Columnas por las que se puede ordenar: el DAO las usa tal cual (en SQL irán al ORDER BY)
+// Columnas por las que se puede ordenar: el DAO las usa tal cual (en SQL van al ORDER BY)
 const CAMPOS_ORDENABLES = ["id", "ticker", "nombre", "mercado", "ratio", "nivel", "cantidad", "topeCedears"];
 
 // Cada campo se define una sola vez y se reutiliza en los esquemas de creación y de actualización

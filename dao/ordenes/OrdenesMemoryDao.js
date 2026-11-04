@@ -3,9 +3,9 @@ import activosMemoryDao from "../activos/ActivosMemoryDao.js";
 
 /**
  * Adaptador DAO en memoria para Órdenes (el lado "N" de la relación Activo 1:N Orden).
- * Respeta la misma interfaz pública que tendrá OrdenesSequelizeDao: el resto de la aplicación no distingue uno de otro.
+ * Respeta la misma interfaz pública que OrdenesSequelizeDao: el resto de la aplicación no distingue uno de otro.
  * Colabora con el DAO de Activos en memoria para adjuntar a cada orden un resumen de su activo
- * (`activo: { id, ticker }`), igual que lo hará el `include` de Sequelize. El ticker NO se guarda en la orden:
+ * (`activo: { id, ticker }`), igual que el `include` de Sequelize. El ticker NO se guarda en la orden:
  * se lee del activo cada vez, así que si el activo cambia de ticker, la orden muestra el nuevo.
  * Devuelve siempre copias: nadie de afuera puede modificar el estado interno por accidente.
  */
@@ -22,7 +22,7 @@ class OrdenesMemoryDao {
     this.#nextId = this.#ordenes.reduce((max, o) => (o.id > max ? o.id : max), 0) + 1;
   }
 
-  // Adjunta el resumen del activo, con las mismas columnas que traerá el include de Sequelize
+  // Adjunta el resumen del activo, con las mismas columnas que trae el include de Sequelize
   async #withRelations(orden) {
     const activo = await this.#activosDao.getById(orden.activoId);
     return { ...orden, activo: activo ? { id: activo.id, ticker: activo.ticker } : null };
@@ -68,7 +68,7 @@ class OrdenesMemoryDao {
   }
 
   // Toda orden nace "viva"; el id es autoincremental y se ignora cualquier id o estado que venga en los datos.
-  // motivo ausente → null, como lo devolverá la base (así los dos modos responden igual).
+  // motivo ausente → null, como lo devuelve la base (así los dos modos responden igual).
   async save(data) {
     const { activoId, sentido, cantidad, precioLimite, validaHasta, motivo } = data;
     const nueva = {

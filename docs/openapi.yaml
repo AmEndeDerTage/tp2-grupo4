@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: API Activos y Órdenes
-  version: 0.2.0
+  version: 0.3.0
   description: |
     API REST en capas (Express + Node) sobre un recorte **hipotético** de un sistema de inversiones en CEDEARs.
     Un **Activo** es un CEDEAR seguido por el sistema (nivel de seguimiento, cantidad en cartera y tope permitido).
