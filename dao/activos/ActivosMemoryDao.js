@@ -36,7 +36,8 @@ class ActivosMemoryDao {
         const valA = a[campo];
         const valB = b[campo];
         if (valA === valB) return a.id - b.id; // desempate estable por id
-        const cmp = typeof valA === "number" ? valA - valB : String(valA).localeCompare(String(valB));
+        // Compara por valor (números) o por código de carácter (textos), igual que SQLite; localeCompare ordenaría distinto
+        const cmp = valA < valB ? -1 : 1;
         return desc ? -cmp : cmp;
       });
     }
