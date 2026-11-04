@@ -50,6 +50,38 @@ class OrdenesSequelizeDao {
     const orden = await OrdenModel.findByPk(id, { attributes: ATRIBUTOS, include: INCLUDE });
     return orden ? orden.get({ plain: true }) : null;
   }
+
+  // Toda orden nace "viva"; la base asigna el id y se ignora cualquier id o estado que venga en los datos.
+  // motivo ausente → null. Después de crear se relee para devolverla con su activo, igual que en memoria.
+  async save(data) {
+    const { activoId, sentido, cantidad, precioLimite, validaHasta, motivo } = data;
+    const nueva = await OrdenModel.create({
+      activoId,
+      sentido,
+      cantidad,
+      precioLimite,
+      validaHasta,
+      estado: "viva",
+      motivo: motivo ?? null,
+    });
+    return this.getById(nueva.id);
+  }
+
+  // Pisa solo los campos que vienen en `cambios`; el id y el resumen del activo nunca se guardan. Null si no existe.
+  async update(id, cambios) {
+    const orden = await OrdenModel.findByPk(id, { attributes: ATRIBUTOS });
+    if (!orden) return null;
+
+    const { id: _id, activo: _activo, ...cambiosPermitidos } = cambios;
+    await orden.update(cambiosPermitidos);
+    return this.getById(id);
+  }
+
+  // Devuelve true si borró, false si no existía
+  async delete(id) {
+    const borrados = await OrdenModel.destroy({ where: { id } });
+    return borrados > 0;
+  }
 }
 
 // Instancia por defecto para la aplicación, y la clase para poder crear otras
