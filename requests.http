@@ -2,7 +2,8 @@
 ### Documentación interactiva: http://localhost:8000/api-docs
 ### Correrlos EN ORDEN con el servidor recién arrancado y los datos en la semilla: en memoria alcanza con reiniciar;
 ### en sequelize los datos sobreviven al reinicio, así que antes hay que parar el servidor y borrar database.sqlite.
-### Los 53 casos dan lo mismo en los dos modos (PERSISTENCE_TYPE en .env).
+### Los 59 casos dan lo mismo en los dos modos (PERSISTENCE_TYPE en .env).
+### Los eventos (54 a 59) no cambian las respuestas: se ven en la consola del servidor y en notifications.log.
 ### Los pedidos con "# @name" guardan su respuesta: los siguientes usan el id creado ({{nombre.response.body.$.id}}).
 
 @base = http://localhost:8000
@@ -351,3 +352,74 @@ DELETE {{base}}/activos/{{activoL1.response.body.$.id}}
 
 ### 53. Órdenes de un activo inexistente → 404 ACTIVO_NO_ENCONTRADO
 GET {{base}}/activos/999/ordenes
+
+### ===================== EVENTOS (clase 10) =====================
+### No cambian ninguna respuesta. orden.creada imprime la tabla en la consola del servidor (o en notifications.log con
+### NOTIFIER_TYPE=file); activo.topeCerca va siempre a notifications.log. Umbral: TOPE_CERCA_PCT=90.
+### AAPL en este punto: 0 en cartera, tope 30, una compra viva de 10 (la 3). El 90 % de 30 es 27.
+
+### 54. Compra que no llega al umbral (AAPL: 10 + 5 = 15 de 30, 50 %) → 201 · consola: tabla; sin aviso de tope
+# @name compraAapl
+POST {{base}}/ordenes
+Content-Type: application/json
+
+{
+  "activoId": 2,
+  "sentido": "compra",
+  "cantidad": 5,
+  "precioLimite": 12,
+  "validaHasta": "2026-12-15",
+  "motivo": "Tercera tanda de compra"
+}
+
+### 55. Editar solo el precio de esa compra → 200 · sin eventos (la cantidad no cambió)
+PUT {{base}}/ordenes/{{compraAapl.response.body.$.id}}
+Content-Type: application/json
+
+{
+  "precioLimite": 11.5
+}
+
+### 56. Editar su cantidad a 17 (AAPL: 10 + 17 = 27 de 30, 90 %) → 200 · notifications.log: aviso de tope; sin tabla (la orden ya existía)
+PUT {{base}}/ordenes/{{compraAapl.response.body.$.id}}
+Content-Type: application/json
+
+{
+  "cantidad": 17
+}
+
+### 57. Venta (KO: 45 en cartera − 10 en ventas vivas = 35 disponibles) → 201 · consola: tabla de VENTA; las ventas no miran el tope
+POST {{base}}/ordenes
+Content-Type: application/json
+
+{
+  "activoId": 1,
+  "sentido": "venta",
+  "cantidad": 5,
+  "precioLimite": 80,
+  "validaHasta": "2026-12-15"
+}
+
+### 58. Compra que llena el tope (AAPL: 10 + 17 + 3 = 30 de 30, 100 %) → 201 · consola: tabla; notifications.log: aviso de tope
+POST {{base}}/ordenes
+Content-Type: application/json
+
+{
+  "activoId": 2,
+  "sentido": "compra",
+  "cantidad": 3,
+  "precioLimite": 14,
+  "validaHasta": "2026-12-15"
+}
+
+### 59. Una compra más, rechazada por la regla 6 (30 + 1 > 30) → 409 TOPE_EXCEDIDO · sin eventos: no se guardó nada
+POST {{base}}/ordenes
+Content-Type: application/json
+
+{
+  "activoId": 2,
+  "sentido": "compra",
+  "cantidad": 1,
+  "precioLimite": 15,
+  "validaHasta": "2026-12-15"
+}

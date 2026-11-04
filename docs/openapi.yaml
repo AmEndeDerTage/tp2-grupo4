@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: API Activos y Órdenes
-  version: 0.3.0
+  version: 0.4.0
   description: |
     API REST en capas (Express + Node) sobre un recorte **hipotético** de un sistema de inversiones en CEDEARs.
     Un **Activo** es un CEDEAR seguido por el sistema (nivel de seguimiento, cantidad en cartera y tope permitido).
@@ -11,6 +11,12 @@ info:
 
     Todos los errores tienen la forma `{ "error": { "code", "message", "details?" } }`.
     La persistencia (`memory` | `sequelize`) se elige por variable de entorno y no cambia las respuestas.
+
+    **Eventos de dominio** (no cambian ninguna respuesta: son avisos que salen después de guardar). Crear una orden
+    emite `orden.creada`, que imprime la «tabla para colocar a mano» por consola o la agrega al archivo
+    (`NOTIFIER_TYPE`). Crear una compra, o editar su cantidad, emite `activo.topeCerca` cuando cartera + compras
+    vivas llega al `TOPE_CERCA_PCT` % del tope; ese aviso va siempre al archivo (`NOTIFICATIONS_LOG_PATH`).
+    Si un aviso falla, la operación responde igual.
 
 servers:
   - url: /
@@ -269,6 +275,9 @@ paths:
         **5** venta ≤ cartera − ventas vivas (409 `CANTIDAD_INSUFICIENTE`) ·
         **6** compra: cartera + compras vivas + la nueva ≤ tope (409 `TOPE_EXCEDIDO`).
         `estado` e `id` no se envían: si vienen, se ignoran.
+
+        Después de guardar emite `orden.creada` (tabla para colocar a mano) y, si es una compra que deja lo
+        comprometido en `TOPE_CERCA_PCT` % o más del tope, `activo.topeCerca`. Un aviso que falla no cambia la respuesta.
       operationId: crearOrden
       requestBody:
         required: true
@@ -350,6 +359,8 @@ paths:
         Solo se editan `cantidad`, `precioLimite`, `validaHasta` y `motivo` (al menos uno). `activoId` y `sentido` no:
         sería otra orden. Reglas: **7** no se modifica una orden ejecutada · **3** si cambia el precio, no duplica otra viva ·
         **5/6** si cambia la cantidad, entra en lo disponible. En 3, 5 y 6 la propia orden no se cuenta.
+        Si el cambio incluye la `cantidad` de una compra y lo comprometido llega a `TOPE_CERCA_PCT` % del tope,
+        emite `activo.topeCerca`; editar solo precio, fecha o motivo no avisa.
       operationId: actualizarOrden
       requestBody:
         required: true
