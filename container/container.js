@@ -7,6 +7,10 @@ import makeOrdenUseCases from "../usecases/ordenes/makeOrdenUseCases.js";
 import OrdenesController from "../controllers/OrdenesController.js";
 import createOrdenesRouter from "../routes/ordenesRoutes.js";
 import createDocsRouter from "../docs/swaggerRouter.js";
+import createEventBus from "../events/eventBus.js";
+import EVENTS from "../events/eventNames.js";
+import { getNotifier } from "../notifications/notifierFactory.js";
+import registerAlertListeners from "../alerts/registerAlertListeners.js";
 
 /**
  * Composition Root.
@@ -27,16 +31,23 @@ async function buildContainer() {
     await ordenesDao.init();
   }
 
-  // 2. Casos de uso con sus dependencias inyectadas
+  // 2. Eventos: un solo bus para toda la app. Los listeners de alerts/ se registran acá con sus notificadores:
+  //    orden.creada sale por el de NOTIFIER_TYPE
+  const events = createEventBus();
+  registerAlertListeners(events, {
+    ordenNotifier: getNotifier(EVENTS.ORDEN_CREADA),
+  });
+
+  // 3. Casos de uso con sus dependencias inyectadas
   // Cada entidad recibe también el DAO de la otra: Activos lo usa para la regla 8 y Órdenes para las reglas sobre el activo
   const activoUseCases = makeActivoUseCases({ activosDao, ordenesDao });
-  const ordenUseCases = makeOrdenUseCases({ ordenesDao, activosDao });
+  const ordenUseCases = makeOrdenUseCases({ ordenesDao, activosDao, events });
 
-  // 3. Controladores con los casos de uso inyectados
+  // 4. Controladores con los casos de uso inyectados
   const activosController = new ActivosController(activoUseCases);
   const ordenesController = new OrdenesController(ordenUseCases);
 
-  // 4. Routers con los controladores inyectados, montados en el router principal
+  // 5. Routers con los controladores inyectados, montados en el router principal
   const router = Router();
   router.use("/activos", createActivosRouter(activosController));
   router.use("/ordenes", createOrdenesRouter(ordenesController));
