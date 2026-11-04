@@ -2,6 +2,7 @@ import { PERSISTENCE_TYPE } from "../config/config.js";
 import activosMemoryDao from "./activos/ActivosMemoryDao.js";
 import activosSequelizeDao from "./activos/ActivosSequelizeDao.js";
 import ordenesMemoryDao from "./ordenes/OrdenesMemoryDao.js";
+import ordenesSequelizeDao from "./ordenes/OrdenesSequelizeDao.js";
 
 /**
  * Factory de DAOs.
@@ -21,7 +22,8 @@ function getActivosDao() {
 
 function getOrdenesDao() {
   if (PERSISTENCE_TYPE === "sequelize") {
-    throw new Error("Persistencia sequelize todavía no implementada para Órdenes");
+    console.log("[Persistencia] Órdenes: Sequelize (SQLite)");
+    return ordenesSequelizeDao;
   }
   console.log("[Persistencia] Órdenes: memoria (array JS)");
   return ordenesMemoryDao;
