@@ -1,5 +1,7 @@
+import { Op, literal } from "sequelize";
 import { ActivoModel, OrdenModel } from "../models/index.js";
 import { SEMILLA_ORDENES } from "../semilla.js";
+import { transaccionSequelize } from "../transacciones.js";
 
 // Columnas pedidas explícitamente, en el mismo orden en que las devuelve el DAO en memoria
 const ATRIBUTOS = ["id", "activoId", "sentido", "cantidad", "precioLimite", "validaHasta", "estado", "motivo"];
@@ -74,6 +76,40 @@ class OrdenesSequelizeDao {
     const { id: _id, activo: _activo, ...cambiosPermitidos } = cambios;
     await orden.update(cambiosPermitidos, { transaction: tx });
     return this.getById(id, tx);
+  }
+
+  /**
+   * Ejecuta una orden viva en UNA transacción, con dos UPDATE condicionales (el patrón lend() del profesor):
+   *  1. la orden pasa a "ejecutada" solo si sigue "viva" (WHERE estado = 'viva');
+   *  2. la cartera del activo se mueve (+ en compra, − en venta) solo si no queda negativa
+   *     (WHERE cantidad >= lo que se vende), junto con `cambiosActivo` (p. ej. { nivel: "L3" }).
+   * Devuelve la orden ejecutada, o null si no existe o no estaba viva.
+   * Si el 1 no encuentra fila, todavía no cambió nada: devuelve null. Si el 2 no encuentra fila, el 1 YA se escribió:
+   * se LANZA un error para que la transacción haga rollback y la orden vuelva a "viva" (devolver null confirmaría el 1).
+   * Usa la transacción del caso de uso (`tx`); si no recibe ninguna, abre la suya, como lend().
+   */
+  async ejecutar(id, cambiosActivo = {}, tx) {
+    const trabajo = async (t) => {
+      const orden = await OrdenModel.findByPk(id, { attributes: ["id", "activoId", "sentido", "cantidad"], transaction: t });
+      if (!orden) return false;
+
+      const [marcadas] = await OrdenModel.update({ estado: "ejecutada" }, { where: { id, estado: "viva" }, transaction: t });
+      if (marcadas === 0) return false;
+
+      const delta = orden.sentido === "compra" ? orden.cantidad : -orden.cantidad;
+      const { id: _id, cantidad: _cantidad, ...cambiosPermitidos } = cambiosActivo;
+      const [ajustados] = await ActivoModel.update(
+        { cantidad: literal(`cantidad + ${delta}`), ...cambiosPermitidos },
+        { where: { id: orden.activoId, cantidad: { [Op.gte]: Math.max(0, -delta) } }, transaction: t }
+      );
+      if (ajustados === 0) {
+        throw new Error(`No se pudo mover la cartera del activo ${orden.activoId} al ejecutar la orden ${id}`);
+      }
+      return true;
+    };
+
+    const ejecutada = tx ? await trabajo(tx) : await transaccionSequelize(trabajo);
+    return ejecutada ? this.getById(id, tx) : null;
   }
 
   // Devuelve true si borró, false si no existía

@@ -96,6 +96,29 @@ class OrdenesMemoryDao {
     return this.#withRelations(this.#ordenes[indice]);
   }
 
+  /**
+   * Ejecuta una orden viva: la marca "ejecutada" y mueve la cartera de su activo (+cantidad en compra, −cantidad en venta),
+   * aplicando además `cambiosActivo` (p. ej. { nivel: "L3" }). Mismo contrato que OrdenesSequelizeDao.ejecutar:
+   * devuelve la orden ejecutada, null si no existe o no estaba viva, y LANZA si la cartera no alcanza (el caso de uso
+   * lo verifica antes: es la segunda barrera). Es el equivalente en memoria de aquella transacción:
+   *  1. la orden se marca primero, sin await desde la comprobación: un pedido simultáneo ya la ve ejecutada;
+   *  2. la cartera se mueve con ajustarCantidad, que es condicional;
+   *  3. si la cartera no alcanza, se deshace el paso 1 a mano (en memoria no hay rollback automático) y se lanza.
+   */
+  async ejecutar(id, cambiosActivo = {}, _tx) {
+    const orden = this.#ordenes.find((o) => o.id === Number(id));
+    if (!orden || orden.estado !== "viva") return null;
+
+    orden.estado = "ejecutada";
+    const delta = orden.sentido === "compra" ? orden.cantidad : -orden.cantidad;
+    const activo = await this.#activosDao.ajustarCantidad(orden.activoId, delta, cambiosActivo);
+    if (!activo) {
+      orden.estado = "viva"; // el "rollback" de la memoria
+      throw new Error(`No se pudo mover la cartera del activo ${orden.activoId} al ejecutar la orden ${id}`);
+    }
+    return this.#withRelations(orden);
+  }
+
   // Devuelve true si borró, false si no existía
   async delete(id, _tx) {
     const indice = this.#ordenes.findIndex((o) => o.id === Number(id));

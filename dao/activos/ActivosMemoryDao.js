@@ -78,6 +78,22 @@ class ActivosMemoryDao {
     return { ...this.#activos[indice] };
   }
 
+  /**
+   * Mueve la cartera: suma `delta` a la cantidad (negativo = resta) y aplica `cambios` extra (p. ej. { nivel: "L3" }).
+   * Condicional, como adjustStock del profesor: si el activo no existe o la cantidad quedaría negativa, no toca nada
+   * y devuelve null. Entre la comprobación y la modificación no hay ningún await: ningún otro pedido puede meterse
+   * en el medio, así que comprobar-y-modificar es atómico sin transacción. La usa OrdenesMemoryDao.ejecutar.
+   */
+  async ajustarCantidad(id, delta, cambios = {}, _tx) {
+    const activo = this.#activos.find((a) => a.id === Number(id));
+    if (!activo || activo.cantidad + delta < 0) return null;
+
+    const { id: _ignorado, cantidad: _cantidad, ...cambiosPermitidos } = cambios;
+    activo.cantidad += delta;
+    Object.assign(activo, cambiosPermitidos);
+    return { ...activo };
+  }
+
   // Devuelve true si borró, false si no existía
   async delete(id, _tx) {
     const indice = this.#activos.findIndex((a) => a.id === Number(id));
