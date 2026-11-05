@@ -15,7 +15,7 @@ info:
     **Eventos de dominio** (no cambian ninguna respuesta: son avisos que salen después de guardar). Crear una orden
     emite `orden.creada`, que imprime la «tabla para colocar a mano» por consola o la agrega al archivo
     (`NOTIFIER_TYPE`). Crear una compra, o editar su cantidad, emite `activo.topeCerca` cuando cartera + compras
-    vivas llega al `TOPE_CERCA_PCT` % del tope; ese aviso va siempre al archivo (`NOTIFICATIONS_LOG_PATH`).
+    vivas llega al `TOPE_CERCA_PCT` % del tope; ese aviso sale siempre por dos canales: archivo (`NOTIFICATIONS_LOG_PATH`) y consola.
     Si un aviso falla, la operación responde igual.
 
 servers:

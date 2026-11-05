@@ -355,7 +355,7 @@ GET {{base}}/activos/999/ordenes
 
 ### ===================== EVENTOS (clase 10) =====================
 ### No cambian ninguna respuesta. orden.creada imprime la tabla en la consola del servidor (o en notifications.log con
-### NOTIFIER_TYPE=file); activo.topeCerca va siempre a notifications.log. Umbral: TOPE_CERCA_PCT=90.
+### NOTIFIER_TYPE=file); activo.topeCerca va siempre por dos canales: notifications.log y la consola. Umbral: TOPE_CERCA_PCT=90.
 ### AAPL en este punto: 0 en cartera, tope 30, una compra viva de 10 (la 3). El 90 % de 30 es 27.
 
 ### 54. Compra que no llega al umbral (AAPL: 10 + 5 = 15 de 30, 50 %) → 201 · consola: tabla; sin aviso de tope
@@ -380,7 +380,7 @@ Content-Type: application/json
   "precioLimite": 11.5
 }
 
-### 56. Editar su cantidad a 17 (AAPL: 10 + 17 = 27 de 30, 90 %) → 200 · notifications.log: aviso de tope; sin tabla (la orden ya existía)
+### 56. Editar su cantidad a 17 (AAPL: 10 + 17 = 27 de 30, 90 %) → 200 · aviso de tope en notifications.log y en consola; sin tabla (la orden ya existía)
 PUT {{base}}/ordenes/{{compraAapl.response.body.$.id}}
 Content-Type: application/json
 
@@ -400,7 +400,7 @@ Content-Type: application/json
   "validaHasta": "2026-12-15"
 }
 
-### 58. Compra que llena el tope (AAPL: 10 + 17 + 3 = 30 de 30, 100 %) → 201 · consola: tabla; notifications.log: aviso de tope
+### 58. Compra que llena el tope (AAPL: 10 + 17 + 3 = 30 de 30, 100 %) → 201 · consola: tabla y aviso de tope; notifications.log: aviso de tope
 POST {{base}}/ordenes
 Content-Type: application/json
 
