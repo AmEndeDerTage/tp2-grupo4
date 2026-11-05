@@ -8,6 +8,7 @@ import activosMemoryDao from "../activos/ActivosMemoryDao.js";
  * (`activo: { id, ticker }`), igual que el `include` de Sequelize. El ticker NO se guarda en la orden:
  * se lee del activo cada vez, así que si el activo cambia de ticker, la orden muestra el nuevo.
  * Devuelve siempre copias: nadie de afuera puede modificar el estado interno por accidente.
+ * Los métodos que se usan dentro de una transacción reciben un `_tx` al final, por simetría con Sequelize, y lo ignoran.
  */
 
 class OrdenesMemoryDao {
@@ -34,7 +35,7 @@ class OrdenesMemoryDao {
    * Sin `limit` devuelve todas las que cumplen los filtros (los casos de uso lo usan para sumar órdenes vivas).
    * Devuelve { items, total }: `total` es la cantidad que cumple los filtros ANTES de paginar.
    */
-  async getAll({ activoId, estado, sentido, sort, page = 1, limit } = {}) {
+  async getAll({ activoId, estado, sentido, sort, page = 1, limit } = {}, _tx) {
     let resultado = this.#ordenes.filter(
       (o) =>
         (activoId === undefined || o.activoId === Number(activoId)) &&
@@ -62,14 +63,14 @@ class OrdenesMemoryDao {
     return { items, total };
   }
 
-  async getById(id) {
+  async getById(id, _tx) {
     const orden = this.#ordenes.find((o) => o.id === Number(id));
     return orden ? this.#withRelations(orden) : null;
   }
 
   // Toda orden nace "viva"; el id es autoincremental y se ignora cualquier id o estado que venga en los datos.
   // motivo ausente → null, como lo devuelve la base (así los dos modos responden igual).
-  async save(data) {
+  async save(data, _tx) {
     const { activoId, sentido, cantidad, precioLimite, validaHasta, motivo } = data;
     const nueva = {
       id: this.#nextId++,
@@ -86,7 +87,7 @@ class OrdenesMemoryDao {
   }
 
   // Pisa solo los campos que vienen en `cambios`; el id y el resumen del activo nunca se guardan. Null si no existe.
-  async update(id, cambios) {
+  async update(id, cambios, _tx) {
     const indice = this.#ordenes.findIndex((o) => o.id === Number(id));
     if (indice === -1) return null;
 
@@ -96,7 +97,7 @@ class OrdenesMemoryDao {
   }
 
   // Devuelve true si borró, false si no existía
-  async delete(id) {
+  async delete(id, _tx) {
     const indice = this.#ordenes.findIndex((o) => o.id === Number(id));
     if (indice === -1) return false;
 

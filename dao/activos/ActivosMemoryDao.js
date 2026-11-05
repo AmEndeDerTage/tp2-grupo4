@@ -5,6 +5,8 @@ import { SEMILLA_ACTIVOS } from "../semilla.js";
  * Guarda los activos en un array privado. Todos los métodos son `async` para que la firma sea la misma
  * que la del adaptador Sequelize: el resto de la aplicación no distingue uno de otro.
  * Devuelve siempre copias ({ ...x }): nadie de afuera puede modificar el estado interno por accidente.
+ * Los métodos que se usan dentro de una transacción reciben un `_tx` al final, por simetría con Sequelize, y lo ignoran:
+ * en memoria no hay transacción que pasar (ver dao/transacciones.js).
  */
 
 class ActivosMemoryDao {
@@ -47,13 +49,13 @@ class ActivosMemoryDao {
     return { items: resultado.map((a) => ({ ...a })), total };
   }
 
-  async getById(id) {
+  async getById(id, _tx) {
     const activo = this.#activos.find((a) => a.id === Number(id));
     return activo ? { ...activo } : null;
   }
 
   // Búsqueda exacta por ticker: la usa el caso de uso para la regla de ticker único
-  async getByTicker(ticker) {
+  async getByTicker(ticker, _tx) {
     const activo = this.#activos.find((a) => a.ticker === ticker);
     return activo ? { ...activo } : null;
   }
@@ -67,7 +69,7 @@ class ActivosMemoryDao {
   }
 
   // Pisa solo los campos que vienen en `cambios`; el id nunca se modifica. Devuelve null si no existe.
-  async update(id, cambios) {
+  async update(id, cambios, _tx) {
     const indice = this.#activos.findIndex((a) => a.id === Number(id));
     if (indice === -1) return null;
 
@@ -77,7 +79,7 @@ class ActivosMemoryDao {
   }
 
   // Devuelve true si borró, false si no existía
-  async delete(id) {
+  async delete(id, _tx) {
     const indice = this.#activos.findIndex((a) => a.id === Number(id));
     if (indice === -1) return false;
 

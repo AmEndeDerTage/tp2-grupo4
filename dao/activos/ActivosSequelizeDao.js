@@ -10,6 +10,8 @@ const ATRIBUTOS = ["id", "ticker", "nombre", "mercado", "ratio", "nivel", "canti
  * Adaptador DAO de Activos con Sequelize (SQLite).
  * Respeta la misma interfaz pública que ActivosMemoryDao: mismos métodos, mismos parámetros y objetos planos
  * con la misma forma. Por eso los casos de uso no distinguen uno de otro.
+ * Los métodos que se usan dentro de una transacción reciben un `tx` opcional al final y lo pasan a cada consulta
+ * (`transaction: tx`): así leen y escriben dentro de la transacción del caso de uso. Sin `tx`, van por fuera.
  */
 class ActivosSequelizeDao {
   /**
@@ -53,14 +55,14 @@ class ActivosSequelizeDao {
     return { items: rows.map((a) => a.get({ plain: true })), total: count };
   }
 
-  async getById(id) {
-    const activo = await ActivoModel.findByPk(id, { attributes: ATRIBUTOS });
+  async getById(id, tx) {
+    const activo = await ActivoModel.findByPk(id, { attributes: ATRIBUTOS, transaction: tx });
     return activo ? activo.get({ plain: true }) : null;
   }
 
   // Búsqueda exacta por ticker: la usa el caso de uso para la regla de ticker único
-  async getByTicker(ticker) {
-    const activo = await ActivoModel.findOne({ where: { ticker }, attributes: ATRIBUTOS });
+  async getByTicker(ticker, tx) {
+    const activo = await ActivoModel.findOne({ where: { ticker }, attributes: ATRIBUTOS, transaction: tx });
     return activo ? activo.get({ plain: true }) : null;
   }
 
@@ -76,13 +78,13 @@ class ActivosSequelizeDao {
   }
 
   // Pisa solo los campos que vienen en `cambios`; el id nunca se modifica. Devuelve null si no existe.
-  async update(id, cambios) {
-    const activo = await ActivoModel.findByPk(id, { attributes: ATRIBUTOS });
+  async update(id, cambios, tx) {
+    const activo = await ActivoModel.findByPk(id, { attributes: ATRIBUTOS, transaction: tx });
     if (!activo) return null;
 
     const { id: _ignorado, ...cambiosPermitidos } = cambios;
     try {
-      await activo.update(cambiosPermitidos);
+      await activo.update(cambiosPermitidos, { transaction: tx });
       return activo.get({ plain: true });
     } catch (error) {
       this.#traducirTickerDuplicado(error, cambiosPermitidos.ticker);
@@ -90,8 +92,8 @@ class ActivosSequelizeDao {
   }
 
   // Devuelve true si borró, false si no existía
-  async delete(id) {
-    const borrados = await ActivoModel.destroy({ where: { id } });
+  async delete(id, tx) {
+    const borrados = await ActivoModel.destroy({ where: { id }, transaction: tx });
     return borrados > 0;
   }
 
