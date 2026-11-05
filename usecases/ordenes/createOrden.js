@@ -25,16 +25,23 @@ import {
  * Los payloads son objetos planos armados acá, con el ticker ya resuelto (el activo se cargó para la regla 1):
  * el listener no necesita ningún DAO.
  * Leer el umbral de config acá está bien (es parte de la regla: cuándo avisar); instanciar un notificador, no (es el canal).
+ *
+ * Leer, verificar y guardar van dentro de UNA transacción (`transaccion`, inyectada): si no, dos pedidos simultáneos
+ * leen lo mismo, pasan los dos las reglas 3, 5 y 6 y se guardan los dos (la carrera A1). Los eventos se emiten
+ * DESPUÉS de que la transacción confirmó: adentro, un rollback posterior dejaría anunciado algo que no pasó.
  */
-async function createOrden(data, ordenesDao, activosDao, events) {
-  const activo = await obtenerActivoDeLaOrden(data.activoId, activosDao);
-  verificarNivelOperable(activo, data.sentido);
+async function createOrden(data, ordenesDao, activosDao, events, transaccion) {
+  const { activo, vivas, creada } = await transaccion(async (tx) => {
+    const activo = await obtenerActivoDeLaOrden(data.activoId, activosDao, tx);
+    verificarNivelOperable(activo, data.sentido);
 
-  const vivas = await ordenesVivasDelMismoLado(ordenesDao, activo.id, data.sentido);
-  verificarNoDuplicada(vivas, data.precioLimite, activo, data.sentido);
-  verificarCupo(activo, data.sentido, data.cantidad, vivas);
+    const vivas = await ordenesVivasDelMismoLado(ordenesDao, activo.id, data.sentido, undefined, tx);
+    verificarNoDuplicada(vivas, data.precioLimite, activo, data.sentido);
+    verificarCupo(activo, data.sentido, data.cantidad, vivas);
 
-  const creada = await ordenesDao.save(data);
+    const creada = await ordenesDao.save(data, tx);
+    return { activo, vivas, creada };
+  });
 
   events.emit(EVENTS.ORDEN_CREADA, {
     id: creada.id,

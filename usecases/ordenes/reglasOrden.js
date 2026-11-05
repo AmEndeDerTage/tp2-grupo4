@@ -5,6 +5,7 @@ import AppError from "../../errors/AppError.js";
  * (createOrden, updateOrden y, más adelante, la ejecución). Cada función verifica una regla y,
  * si no se cumple, lanza un AppError con su código; si se cumple, no hace nada (o devuelve lo que buscó).
  * No conocen HTTP ni ninguna implementación concreta de DAO: reciben los DAOs por parámetro.
+ * Las que leen datos reciben además el `tx` de la transacción del caso de uso, para leer dentro de ella.
  */
 
 // Niveles en los que se permite comprar: L2 = lista para comprar, L3 = con posición (regla 4)
@@ -14,8 +15,8 @@ const NIVELES_COMPRABLES = ["L2", "L3"];
  * Regla 1: el activo de la orden tiene que existir (ACTIVO_NO_ENCONTRADO, 404).
  * Devuelve el activo, porque las demás reglas lo necesitan (nivel, cantidad, tope).
  */
-async function obtenerActivoDeLaOrden(activoId, activosDao) {
-  const activo = await activosDao.getById(activoId);
+async function obtenerActivoDeLaOrden(activoId, activosDao, tx) {
+  const activo = await activosDao.getById(activoId, tx);
   if (!activo) {
     throw new AppError("ACTIVO_NO_ENCONTRADO", `No existe un activo con id ${activoId}`, 404);
   }
@@ -26,8 +27,8 @@ async function obtenerActivoDeLaOrden(activoId, activosDao) {
  * Las órdenes VIVAS del mismo activo y sentido, sin contar `excluirId` (la propia orden, al editarla).
  * Es la base de las reglas 3, 5 y 6: lo ya ejecutado está en `activo.cantidad`; lo vivo es lo comprometido.
  */
-async function ordenesVivasDelMismoLado(ordenesDao, activoId, sentido, excluirId) {
-  const { items } = await ordenesDao.getAll({ activoId, sentido, estado: "viva" });
+async function ordenesVivasDelMismoLado(ordenesDao, activoId, sentido, excluirId, tx) {
+  const { items } = await ordenesDao.getAll({ activoId, sentido, estado: "viva" }, tx);
   return items.filter((o) => o.id !== excluirId);
 }
 

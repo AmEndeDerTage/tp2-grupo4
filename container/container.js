@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { getActivosDao, getOrdenesDao } from "../dao/daoFactory.js";
+import { getActivosDao, getOrdenesDao, getTransaccion } from "../dao/daoFactory.js";
 import makeActivoUseCases from "../usecases/activos/makeActivoUseCases.js";
 import ActivosController from "../controllers/ActivosController.js";
 import createActivosRouter from "../routes/activosRoutes.js";
@@ -45,9 +45,11 @@ async function buildContainer() {
   });
 
   // 3. Casos de uso con sus dependencias inyectadas
-  // Cada entidad recibe también el DAO de la otra: Activos lo usa para la regla 8 y Órdenes para las reglas sobre el activo
-  const activoUseCases = makeActivoUseCases({ activosDao, ordenesDao });
-  const ordenUseCases = makeOrdenUseCases({ ordenesDao, activosDao, events });
+  // Cada entidad recibe también el DAO de la otra: Activos lo usa para la regla 8 y Órdenes para las reglas sobre el activo.
+  // Las dos reciben la misma forma de transacción, elegida por la factory igual que los DAOs.
+  const transaccion = getTransaccion();
+  const activoUseCases = makeActivoUseCases({ activosDao, ordenesDao, transaccion });
+  const ordenUseCases = makeOrdenUseCases({ ordenesDao, activosDao, events, transaccion });
 
   // 4. Controladores con los casos de uso inyectados
   const activosController = new ActivosController(activoUseCases);

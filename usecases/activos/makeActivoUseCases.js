@@ -11,15 +11,16 @@ import getOrdenesDeActivo from "./getOrdenesDeActivo.js";
  *  - activosDao: el DAO de la propia entidad
  *  - ordenesDao: el de la entidad relacionada, para la regla 8 (no borrar un activo con órdenes)
  *    y para recorrer la relación (GET /activos/:id/ordenes)
+ *  - transaccion: cómo correr leer-verificar-escribir como una sola operación (dao/transacciones.js)
  * y devuelve los casos de uso con ellas ya inyectadas, para que el controlador los llame sin conocer ningún DAO.
  */
-function makeActivoUseCases({ activosDao, ordenesDao }) {
+function makeActivoUseCases({ activosDao, ordenesDao, transaccion }) {
   return {
     getActivos: (filtros) => getActivos(filtros, activosDao),
     getActivoById: (id) => getActivoById(id, activosDao),
     createActivo: (data) => createActivo(data, activosDao),
     updateActivo: (id, cambios) => updateActivo(id, cambios, activosDao),
-    deleteActivo: (id) => deleteActivo(id, activosDao, ordenesDao),
+    deleteActivo: (id) => deleteActivo(id, activosDao, ordenesDao, transaccion),
     getOrdenesDeActivo: (id, filtros) => getOrdenesDeActivo(id, filtros, activosDao, ordenesDao),
   };
 }

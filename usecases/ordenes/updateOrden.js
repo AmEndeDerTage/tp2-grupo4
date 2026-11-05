@@ -22,26 +22,34 @@ import {
  * Evento: si el cambio incluye la cantidad de una compra y lo comprometido queda en TOPE_CERCA_PCT % o más
  * del tope, emite activo.topeCerca (mismo criterio que updateBook del profesor: editar solo el precio,
  * la fecha o el motivo no vuelve a avisar). orden.creada no se emite: la orden ya existía.
+ *
+ * Como en createOrden, leer, verificar y guardar van en una transacción y el evento sale después del commit.
+ * La regla 7 también queda protegida: una ejecución simultánea no puede colarse entre la lectura y la escritura.
  */
-async function updateOrden(id, cambios, ordenesDao, activosDao, events) {
-  const orden = await ordenesDao.getById(id);
-  if (!orden) return null;
+async function updateOrden(id, cambios, ordenesDao, activosDao, events, transaccion) {
+  const resultado = await transaccion(async (tx) => {
+    const orden = await ordenesDao.getById(id, tx);
+    if (!orden) return null;
 
-  if (orden.estado === "ejecutada") {
-    throw new AppError("ORDEN_NO_MODIFICABLE", `La orden ${orden.id} ya está ejecutada: no se puede modificar`, 409);
-  }
+    if (orden.estado === "ejecutada") {
+      throw new AppError("ORDEN_NO_MODIFICABLE", `La orden ${orden.id} ya está ejecutada: no se puede modificar`, 409);
+    }
 
-  const activo = await obtenerActivoDeLaOrden(orden.activoId, activosDao);
-  const vivas = await ordenesVivasDelMismoLado(ordenesDao, activo.id, orden.sentido, orden.id);
+    const activo = await obtenerActivoDeLaOrden(orden.activoId, activosDao, tx);
+    const vivas = await ordenesVivasDelMismoLado(ordenesDao, activo.id, orden.sentido, orden.id, tx);
 
-  if (cambios.precioLimite !== undefined) {
-    verificarNoDuplicada(vivas, cambios.precioLimite, activo, orden.sentido);
-  }
-  if (cambios.cantidad !== undefined) {
-    verificarCupo(activo, orden.sentido, cambios.cantidad, vivas);
-  }
+    if (cambios.precioLimite !== undefined) {
+      verificarNoDuplicada(vivas, cambios.precioLimite, activo, orden.sentido);
+    }
+    if (cambios.cantidad !== undefined) {
+      verificarCupo(activo, orden.sentido, cambios.cantidad, vivas);
+    }
 
-  const actualizada = await ordenesDao.update(id, cambios);
+    const actualizada = await ordenesDao.update(id, cambios, tx);
+    return { orden, activo, vivas, actualizada };
+  });
+  if (!resultado) return null;
+  const { orden, activo, vivas, actualizada } = resultado;
 
   if (actualizada && cambios.cantidad !== undefined && orden.sentido === "compra") {
     const topeCerca = evaluarTopeCerca(activo, vivas, actualizada.cantidad, TOPE_CERCA_PCT);
