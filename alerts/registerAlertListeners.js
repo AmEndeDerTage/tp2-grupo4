@@ -5,7 +5,8 @@ import EVENTS from "../events/eventNames.js";
  * No conoce al emisor (los casos de uso) ni el canal concreto: los notificadores llegan inyectados
  * desde el container, por nombre:
  *  - ordenNotifier: el de NOTIFIER_TYPE (consola o archivo), para orden.creada
- *  - topeNotifier:  un notificador adicional, para activo.topeCerca (el container le pasa el de archivo)
+ *  - topeNotifier:  un notificador adicional, para activo.topeCerca (el container le pasa uno compuesto:
+ *                   archivo + consola; el listener no sabe cuántos canales hay detrás)
  *
  * Cada listener atrapa sus propios errores. No es prolijidad: `emit` es síncrono y no espera promesas,
  * así que un listener async que rechaza sin try/catch deja una promesa sin manejar y Node termina

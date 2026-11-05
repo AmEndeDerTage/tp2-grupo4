@@ -10,6 +10,7 @@ import createDocsRouter from "../docs/swaggerRouter.js";
 import createEventBus from "../events/eventBus.js";
 import EVENTS from "../events/eventNames.js";
 import { getNotifier } from "../notifications/notifierFactory.js";
+import createMultiNotifier from "../notifications/multiNotifier.js";
 import registerAlertListeners from "../alerts/registerAlertListeners.js";
 
 /**
@@ -32,11 +33,15 @@ async function buildContainer() {
   }
 
   // 2. Eventos: un solo bus para toda la app. Los listeners de alerts/ se registran acá con sus notificadores:
-  //    orden.creada sale por el de NOTIFIER_TYPE; activo.topeCerca, por uno adicional fijo a archivo (extra de la consigna)
+  //    orden.creada sale por el de NOTIFIER_TYPE; activo.topeCerca, por un notificador adicional (extra de la consigna)
+  //    que avisa por dos canales a la vez: archivo y consola. Sumar otro canal es agregarlo a esta lista.
   const events = createEventBus();
   registerAlertListeners(events, {
     ordenNotifier: getNotifier(EVENTS.ORDEN_CREADA),
-    topeNotifier: getNotifier(EVENTS.ACTIVO_TOPE_CERCA, "file"),
+    topeNotifier: createMultiNotifier([
+      getNotifier(EVENTS.ACTIVO_TOPE_CERCA, "file"),
+      getNotifier(EVENTS.ACTIVO_TOPE_CERCA, "console"),
+    ]),
   });
 
   // 3. Casos de uso con sus dependencias inyectadas
