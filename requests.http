@@ -2,8 +2,8 @@
 ### Documentación interactiva: http://localhost:8000/api-docs
 ### Correrlos EN ORDEN con el servidor recién arrancado y los datos en la semilla: en memoria alcanza con reiniciar;
 ### en sequelize los datos sobreviven al reinicio, así que antes hay que parar el servidor y borrar database.sqlite.
-### Los 59 casos dan lo mismo en los dos modos (PERSISTENCE_TYPE en .env).
-### Los eventos (54 a 59) no cambian las respuestas: se ven en la consola del servidor y en notifications.log.
+### Los 75 casos dan lo mismo en los dos modos (PERSISTENCE_TYPE en .env).
+### Los eventos (54 a 75) no cambian las respuestas: se ven en la consola del servidor y en notifications.log.
 ### Los pedidos con "# @name" guardan su respuesta: los siguientes usan el id creado ({{nombre.response.body.$.id}}).
 
 @base = http://localhost:8000
@@ -422,4 +422,114 @@ Content-Type: application/json
   "cantidad": 1,
   "precioLimite": 15,
   "validaHasta": "2026-12-15"
+}
+
+### ===================== EJECUCIÓN CON TRANSACCIÓN (extra) =====================
+### POST /ordenes/:id/ejecucion asienta que la orden se llenó en el broker: la orden pasa a "ejecutada" y la cartera
+### del activo se mueve (+ en compra, − en venta), todo en UNA transacción. El nivel sigue a la posición: compra → L3;
+### venta que deja un L3 en 0 → L2. Cada ejecución emite orden.ejecutada (consola o archivo, según NOTIFIER_TYPE).
+### En este punto: KO L3, 45 en cartera, ventas vivas 1 (10) y 6 (5) · AAPL L2, 0 en cartera, tope 30,
+### compras vivas 3 (10), 5 (17) y 7 (3): 30 de 30 comprometidos.
+
+### 60. Ejecutar la compra 3 (AAPL: 10 CEDEARs) → 200, estado "ejecutada" · consola: orden ejecutada, cartera 0 → 10, nivel L2 → L3; sin aviso de tope (lo comprometido sigue en 30: pasa de compra viva a cartera)
+POST {{base}}/ordenes/3/ejecucion
+
+### 61. El activo quedó ajustado → 200 (AAPL: nivel L3, cantidad 10)
+GET {{base}}/activos/2
+
+### 62. REGLA 7 — ejecutar de nuevo la misma orden → 409 ORDEN_NO_MODIFICABLE (la cartera no se mueve dos veces)
+POST {{base}}/ordenes/3/ejecucion
+
+### 63. Ejecutar una orden inexistente → 404 ORDEN_NO_ENCONTRADA
+POST {{base}}/ordenes/999/ejecucion
+
+### 64. Ejecutar con un id inválido → 400 VALIDATION_ERROR (params)
+POST {{base}}/ordenes/abc/ejecucion
+
+### 65. Ejecutar la venta 1 (KO: 45 → 35) → 200 · consola: orden ejecutada; KO sigue en L3
+POST {{base}}/ordenes/1/ejecucion
+
+### 66. Ejecutar la venta 6 (KO: 35 → 30) → 200
+POST {{base}}/ordenes/6/ejecucion
+
+### 67. Vender los 30 KO que quedan (30 en cartera − 0 en ventas vivas) → 201 · consola: tabla de VENTA
+# @name ventaTotal
+POST {{base}}/ordenes
+Content-Type: application/json
+
+{
+  "activoId": 1,
+  "sentido": "venta",
+  "cantidad": 30,
+  "precioLimite": 85,
+  "validaHasta": "2026-12-15",
+  "motivo": "Cierre de la posición"
+}
+
+### 68. Ejecutarla → 200 · KO queda con 0 en cartera y vuelve a L2 · consola: cartera 30 → 0, nivel L3 → L2
+POST {{base}}/ordenes/{{ventaTotal.response.body.$.id}}/ejecucion
+
+### ===================== EDITAR EL ACTIVO RESPETA LO COMPROMETIDO (reglas 5 y 6 desde el activo) =====================
+### PUT /activos/:id que toca cantidad o topeCedears: la cartera tiene que cubrir las ventas vivas y cartera + compras
+### vivas no puede pasar el tope. Si el cambio deja lo comprometido en TOPE_CERCA_PCT % o más, avisa activo.topeCerca.
+### AAPL en este punto: L3, 10 en cartera, tope 30, compras vivas 5 (17) y 7 (3): 10 + 20 = 30 comprometidos.
+
+### 69. Bajar el tope de AAPL a 25 (10 + 20 = 30 > 25) → 409 TOPE_EXCEDIDO
+PUT {{base}}/activos/2
+Content-Type: application/json
+
+{
+  "topeCedears": 25
+}
+
+### 70. Subir la cartera de AAPL a 15 (15 + 20 = 35 > 30) → 409 TOPE_EXCEDIDO
+PUT {{base}}/activos/2
+Content-Type: application/json
+
+{
+  "cantidad": 15
+}
+
+### 71. (preparación) Vender 5 AAPL (10 en cartera) → 201 · consola: tabla de VENTA
+POST {{base}}/ordenes
+Content-Type: application/json
+
+{
+  "activoId": 2,
+  "sentido": "venta",
+  "cantidad": 5,
+  "precioLimite": 16,
+  "validaHasta": "2026-12-15"
+}
+
+### 72. Bajar la cartera de AAPL a 4 con 5 en ventas vivas → 409 CANTIDAD_INSUFICIENTE
+PUT {{base}}/activos/2
+Content-Type: application/json
+
+{
+  "cantidad": 4
+}
+
+### 73. Subir el tope de AAPL a 32 (30 de 32, 93,8 %) → 200 · aviso de tope en notifications.log y en consola
+PUT {{base}}/activos/2
+Content-Type: application/json
+
+{
+  "topeCedears": 32
+}
+
+### 74. Subir el tope de AAPL a 40 (30 de 40, 75 %) → 200 · sin aviso
+PUT {{base}}/activos/2
+Content-Type: application/json
+
+{
+  "topeCedears": 40
+}
+
+### 75. Cambiar solo el nombre → 200 · sin aviso (no toca cantidad ni tope)
+PUT {{base}}/activos/2
+Content-Type: application/json
+
+{
+  "nombre": "Apple Inc."
 }

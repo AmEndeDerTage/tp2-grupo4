@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: API Activos y Órdenes
-  version: 0.4.0
+  version: 0.5.0
   description: |
     API REST en capas (Express + Node) sobre un recorte **hipotético** de un sistema de inversiones en CEDEARs.
     Un **Activo** es un CEDEAR seguido por el sistema (nivel de seguimiento, cantidad en cartera y tope permitido).
@@ -16,7 +16,13 @@ info:
     emite `orden.creada`, que imprime la «tabla para colocar a mano» por consola o la agrega al archivo
     (`NOTIFIER_TYPE`). Crear una compra, o editar su cantidad, emite `activo.topeCerca` cuando cartera + compras
     vivas llega al `TOPE_CERCA_PCT` % del tope; ese aviso sale siempre por dos canales: archivo (`NOTIFICATIONS_LOG_PATH`) y consola.
-    Si un aviso falla, la operación responde igual.
+    Editar la `cantidad` o el `topeCedears` de un activo emite el mismo aviso. Ejecutar una orden emite `orden.ejecutada`
+    (por el canal de `NOTIFIER_TYPE`), con la cartera antes y después. Si un aviso falla, la operación responde igual.
+
+    **Transacciones.** Las operaciones que leen, verifican reglas y escriben (alta, edición, borrado y ejecución de
+    órdenes; edición y borrado de activos) corren en una transacción: con pedidos simultáneos, las reglas se cumplen
+    igual en los dos modos de persistencia. La ejecución (`POST /ordenes/{id}/ejecucion`) es la operación atómica:
+    marca la orden y mueve la cartera juntas, o no hace nada.
 
 servers:
   - url: /
@@ -142,7 +148,11 @@ paths:
     put:
       tags: [Activos]
       summary: Modificar parcialmente un activo
-      description: Solo se pisan los campos enviados. Hay que enviar al menos uno.
+      description: |
+        Solo se pisan los campos enviados. Hay que enviar al menos uno. Reglas: **2** el ticker no puede ser el de otro
+        activo · **5 y 6 vistas desde el activo** si cambia `cantidad` o `topeCedears`, lo comprometido en órdenes vivas
+        tiene que seguir entrando (la cartera cubre las ventas vivas; cartera + compras vivas ≤ tope).
+        Si el cambio toca `cantidad` o `topeCedears` y lo comprometido llega a `TOPE_CERCA_PCT` % del tope, emite `activo.topeCerca`.
       operationId: actualizarActivo
       requestBody:
         required: true
@@ -170,13 +180,21 @@ paths:
         "404":
           $ref: "#/components/responses/ActivoNoEncontrado"
         "409":
-          description: El ticker nuevo ya pertenece a otro activo (regla de negocio 2)
+          description: Una regla de negocio impide el cambio (regla 2, o reglas 5 y 6 vistas desde el activo)
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
-              example:
-                error: { code: TICKER_DUPLICADO, message: Ya existe otro activo con el ticker KO }
+              examples:
+                tickerDuplicado:
+                  summary: Regla 2
+                  value: { error: { code: TICKER_DUPLICADO, message: Ya existe otro activo con el ticker KO } }
+                cantidadInsuficiente:
+                  summary: Regla 5 — la cartera no cubre las ventas vivas
+                  value: { error: { code: CANTIDAD_INSUFICIENTE, "message": "AAPL no puede quedar con 4 en cartera: hay 5 comprometidos en ventas vivas" } }
+                topeExcedido:
+                  summary: Regla 6 — lo comprometido supera el tope nuevo
+                  value: { error: { code: TOPE_EXCEDIDO, "message": "AAPL no puede quedar con tope 25: ya hay 30 comprometidos (10 en cartera + 20 en compras vivas)" } }
     delete:
       tags: [Activos]
       summary: Eliminar un activo
@@ -425,6 +443,45 @@ paths:
                 $ref: "#/components/schemas/Error"
               example:
                 error: { code: ORDEN_NO_MODIFICABLE, "message": "La orden 2 ya está ejecutada: no se puede borrar" }
+
+  /ordenes/{id}/ejecucion:
+    parameters:
+      - $ref: "#/components/parameters/OrdenId"
+    post:
+      tags: [Órdenes]
+      summary: Ejecutar una orden viva (operación atómica)
+      description: |
+        Asienta que la orden se llenó en el broker, entera y a su precio límite. En **una transacción**: la orden pasa a
+        `ejecutada` y la `cantidad` del activo se mueve (+ en compra, − en venta); si algo falla a mitad, no cambia nada.
+        El nivel sigue a la posición: una compra deja el activo en `L3`; una venta que deja un `L3` en 0 lo pasa a `L2`.
+        Reglas: **7** una orden ejecutada no se vuelve a ejecutar · **5** en una venta, lo vendido tiene que estar en cartera.
+        Sin cuerpo. Emite `orden.ejecutada` después de confirmar; no emite `activo.topeCerca` (lo comprometido no sube).
+      operationId: ejecutarOrden
+      responses:
+        "200":
+          description: Orden ejecutada, con el resumen de su activo (el activo ajustado se ve con GET /activos/{id})
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Orden"
+              example: { id: 3, activoId: 2, sentido: compra, cantidad: 10, precioLimite: 12.5, validaHasta: "2026-11-27", estado: ejecutada, motivo: null, activo: { id: 2, ticker: AAPL } }
+        "400":
+          $ref: "#/components/responses/ErrorValidacion"
+        "404":
+          $ref: "#/components/responses/OrdenNoEncontrada"
+        "409":
+          description: Una regla de negocio impide ejecutarla (reglas 7 o 5)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              examples:
+                ordenNoModificable:
+                  summary: Regla 7 — ya estaba ejecutada
+                  value: { error: { code: ORDEN_NO_MODIFICABLE, "message": "La orden 3 ya está ejecutada: no se puede volver a ejecutar" } }
+                cantidadInsuficiente:
+                  summary: Regla 5 — la cartera no alcanza para la venta
+                  value: { error: { code: CANTIDAD_INSUFICIENTE, "message": "No se puede ejecutar la venta 6 de 5 KO: hay 3 en cartera" } }
 
 components:
   parameters:
