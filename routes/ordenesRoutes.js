@@ -16,6 +16,8 @@ function createOrdenesRouter(controller) {
   router.post("/", validate(createOrdenSchema), controller.create);
   router.put("/:id", validateParams(ordenIdParamSchema), validate(updateOrdenSchema), controller.update);
   router.delete("/:id", validateParams(ordenIdParamSchema), controller.remove);
+  // Una acción sobre la orden, no un campo editable: por eso es un POST a un subrecurso y no un PUT del estado
+  router.post("/:id/ejecucion", validateParams(ordenIdParamSchema), controller.ejecutar);
 
   return router;
 }

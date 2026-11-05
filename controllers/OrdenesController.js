@@ -40,6 +40,13 @@ class OrdenesController {
     res.json(orden);
   };
 
+  // POST /ordenes/:id/ejecucion → 200 con la orden ya ejecutada (sin body: la orden se ejecuta entera, a su precio límite)
+  ejecutar = async (req, res) => {
+    const orden = await this.#useCases.ejecutarOrden(req.params.id);
+    if (!orden) throw new AppError("ORDEN_NO_ENCONTRADA", `No existe una orden con id ${req.params.id}`, 404);
+    res.json(orden);
+  };
+
   // DELETE /ordenes/:id → 204 sin cuerpo
   remove = async (req, res) => {
     const borrada = await this.#useCases.deleteOrden(req.params.id);

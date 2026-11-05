@@ -2,7 +2,7 @@ import AppError from "../../errors/AppError.js";
 
 /**
  * Reglas de negocio de Órdenes, escritas UNA sola vez y reutilizadas por los casos de uso
- * (createOrden, updateOrden y, más adelante, la ejecución). Cada función verifica una regla y,
+ * (createOrden, updateOrden y ejecutarOrden). Cada función verifica una regla y,
  * si no se cumple, lanza un AppError con su código; si se cumple, no hace nada (o devuelve lo que buscó).
  * No conocen HTTP ni ninguna implementación concreta de DAO: reciben los DAOs por parámetro.
  * Las que leen datos reciben además el `tx` de la transacción del caso de uso, para leer dentro de ella.
@@ -109,6 +109,35 @@ function evaluarTopeCerca(activo, vivasDelMismoLado, cantidad, umbralPct) {
   };
 }
 
+/**
+ * Regla 5 al ejecutar una venta: lo que se vende tiene que estar en cartera (CANTIDAD_INSUFICIENTE, 409).
+ * Al crear y al editar ya se verificó contra lo disponible; acá se vuelve a mirar porque la ejecución es lo que
+ * efectivamente saca los CEDEARs de la cartera. (Una compra no se verifica: lo comprometido no cambia al ejecutarla.)
+ */
+function verificarCarteraParaEjecutar(activo, orden) {
+  if (orden.sentido === "venta" && orden.cantidad > activo.cantidad) {
+    throw new AppError(
+      "CANTIDAD_INSUFICIENTE",
+      `No se puede ejecutar la venta ${orden.id} de ${orden.cantidad} ${activo.ticker}: hay ${activo.cantidad} en cartera`,
+      409
+    );
+  }
+}
+
+/**
+ * El nivel del activo después de ejecutar la orden: el nivel sigue a la posición (L3 = con posición).
+ *  - compra ejecutada → L3, desde cualquier nivel;
+ *  - venta que deja la cartera en 0 sobre un L3 → L2 (vuelve a la lista; si ya no interesa, se baja a mano con PUT).
+ * Devuelve el nivel nuevo, o undefined si no cambia. Pura: no lee nada, recibe todo por parámetro.
+ */
+function nivelTrasEjecucion(activo, orden) {
+  if (orden.sentido === "compra") {
+    return activo.nivel === "L3" ? undefined : "L3";
+  }
+  const queda = activo.cantidad - orden.cantidad;
+  return queda === 0 && activo.nivel === "L3" ? "L2" : undefined;
+}
+
 export {
   NIVELES_COMPRABLES,
   obtenerActivoDeLaOrden,
@@ -117,4 +146,6 @@ export {
   verificarNoDuplicada,
   verificarCupo,
   evaluarTopeCerca,
+  verificarCarteraParaEjecutar,
+  nivelTrasEjecucion,
 };

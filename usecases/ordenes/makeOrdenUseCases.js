@@ -3,6 +3,7 @@ import getOrdenById from "./getOrdenById.js";
 import createOrden from "./createOrden.js";
 import updateOrden from "./updateOrden.js";
 import deleteOrden from "./deleteOrden.js";
+import ejecutarOrden from "./ejecutarOrden.js";
 
 /**
  * Factory de casos de uso de Órdenes.
@@ -20,6 +21,7 @@ function makeOrdenUseCases({ ordenesDao, activosDao, events, transaccion }) {
     createOrden: (data) => createOrden(data, ordenesDao, activosDao, events, transaccion),
     updateOrden: (id, cambios) => updateOrden(id, cambios, ordenesDao, activosDao, events, transaccion),
     deleteOrden: (id) => deleteOrden(id, ordenesDao, transaccion),
+    ejecutarOrden: (id) => ejecutarOrden(id, ordenesDao, activosDao, transaccion),
   };
 }
 
