@@ -10,7 +10,7 @@ import ejecutarOrden from "./ejecutarOrden.js";
  * Recibe sus dependencias por nombre en un objeto (como makeLoanUseCases del profesor):
  *  - ordenesDao: el DAO de la propia entidad
  *  - activosDao: el de la entidad relacionada, para las reglas que miran el activo de la orden
- *  - events: el bus de eventos, para que createOrden y updateOrden anuncien lo que pasó (clase 10)
+ *  - events: el bus de eventos, para que createOrden, updateOrden y ejecutarOrden anuncien lo que pasó (clase 10)
  *  - transaccion: cómo correr leer-verificar-escribir como una sola operación (dao/transacciones.js)
  * y devuelve los casos de uso con ellas ya inyectadas, para que el controlador los llame sin conocer ningún DAO.
  */
@@ -21,7 +21,7 @@ function makeOrdenUseCases({ ordenesDao, activosDao, events, transaccion }) {
     createOrden: (data) => createOrden(data, ordenesDao, activosDao, events, transaccion),
     updateOrden: (id, cambios) => updateOrden(id, cambios, ordenesDao, activosDao, events, transaccion),
     deleteOrden: (id) => deleteOrden(id, ordenesDao, transaccion),
-    ejecutarOrden: (id) => ejecutarOrden(id, ordenesDao, activosDao, transaccion),
+    ejecutarOrden: (id) => ejecutarOrden(id, ordenesDao, activosDao, events, transaccion),
   };
 }
 

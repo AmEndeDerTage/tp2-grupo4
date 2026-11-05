@@ -33,7 +33,7 @@ async function buildContainer() {
   }
 
   // 2. Eventos: un solo bus para toda la app. Los listeners de alerts/ se registran acá con sus notificadores:
-  //    orden.creada sale por el de NOTIFIER_TYPE; activo.topeCerca, por un notificador adicional (extra de la consigna)
+  //    orden.creada y orden.ejecutada salen por el de NOTIFIER_TYPE; activo.topeCerca, por un notificador adicional (extra de la consigna)
   //    que avisa por dos canales a la vez: archivo y consola. Sumar otro canal es agregarlo a esta lista.
   const events = createEventBus();
   registerAlertListeners(events, {

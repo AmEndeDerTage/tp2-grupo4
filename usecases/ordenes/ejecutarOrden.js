@@ -1,4 +1,5 @@
 import AppError from "../../errors/AppError.js";
+import EVENTS from "../../events/eventNames.js";
 import { obtenerActivoDeLaOrden, verificarCarteraParaEjecutar, nivelTrasEjecucion } from "./reglasOrden.js";
 
 /**
@@ -14,9 +15,14 @@ import { obtenerActivoDeLaOrden, verificarCarteraParaEjecutar, nivelTrasEjecucio
  * Todo corre en UNA transacción: leer, verificar y los dos UPDATE del DAO. Si algo falla a mitad, no cambia nada.
  * El DAO devuelve null solo si la orden dejó de estar viva entre la lectura y la escritura, y dentro de la
  * transacción eso no puede pasar: si pasara, es un error del sistema (500), no del cliente.
+ *
+ * Evento orden.ejecutada, emitido DESPUÉS de que la transacción confirmó: adentro, un rollback posterior dejaría
+ * anunciado algo que no pasó. Payload plano armado acá, con la cartera antes y después y el nivel antes y después.
+ * activo.topeCerca no se emite: lo comprometido (cartera + compras vivas) no sube al ejecutar. En una compra pasa
+ * de "compra viva" a "cartera" (mismo total); en una venta, baja.
  */
-async function ejecutarOrden(id, ordenesDao, activosDao, transaccion) {
-  return transaccion(async (tx) => {
+async function ejecutarOrden(id, ordenesDao, activosDao, events, transaccion) {
+  const resultado = await transaccion(async (tx) => {
     const orden = await ordenesDao.getById(id, tx);
     if (!orden) return null;
 
@@ -32,8 +38,25 @@ async function ejecutarOrden(id, ordenesDao, activosDao, transaccion) {
     if (!ejecutada) {
       throw new Error(`La orden ${orden.id} dejó de estar viva durante su propia ejecución`);
     }
-    return ejecutada;
+    return { ejecutada, activo, nivel };
   });
+  if (!resultado) return null;
+
+  const { ejecutada, activo, nivel } = resultado;
+  const delta = ejecutada.sentido === "compra" ? ejecutada.cantidad : -ejecutada.cantidad;
+  events.emit(EVENTS.ORDEN_EJECUTADA, {
+    id: ejecutada.id,
+    ticker: activo.ticker,
+    sentido: ejecutada.sentido,
+    cantidad: ejecutada.cantidad,
+    precioLimite: ejecutada.precioLimite,
+    carteraAntes: activo.cantidad,
+    carteraDespues: activo.cantidad + delta,
+    nivelAntes: activo.nivel,
+    nivelDespues: nivel ?? activo.nivel,
+  });
+
+  return ejecutada;
 }
 
 export default ejecutarOrden;

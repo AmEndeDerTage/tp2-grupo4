@@ -4,7 +4,7 @@ import EVENTS from "../events/eventNames.js";
  * Módulo de alertas: decide QUÉ decir cuando ocurre un evento de dominio.
  * No conoce al emisor (los casos de uso) ni el canal concreto: los notificadores llegan inyectados
  * desde el container, por nombre:
- *  - ordenNotifier: el de NOTIFIER_TYPE (consola o archivo), para orden.creada
+ *  - ordenNotifier: el de NOTIFIER_TYPE (consola o archivo), para orden.creada y orden.ejecutada
  *  - topeNotifier:  un notificador adicional, para activo.topeCerca (el container le pasa uno compuesto:
  *                   archivo + consola; el listener no sabe cuántos canales hay detrás)
  *
@@ -22,6 +22,17 @@ function registerAlertListeners(bus, { ordenNotifier, topeNotifier }) {
       });
     } catch (err) {
       console.error(`[alertas] No se pudo notificar ${EVENTS.ORDEN_CREADA} (orden ${orden.id}):`, err.message);
+    }
+  });
+
+  bus.on(EVENTS.ORDEN_EJECUTADA, async (ejecucion) => {
+    try {
+      await ordenNotifier.notify({
+        subject: `Orden #${ejecucion.id} ejecutada`,
+        body: resumenEjecucion(ejecucion),
+      });
+    } catch (err) {
+      console.error(`[alertas] No se pudo notificar ${EVENTS.ORDEN_EJECUTADA} (orden ${ejecucion.id}):`, err.message);
     }
   });
 
@@ -54,6 +65,12 @@ function tablaParaColocar({ ticker, sentido, cantidad, precioLimite, validaHasta
   ];
   const ancho = Math.max(...filas.map(([campo]) => campo.length));
   return filas.map(([campo, valor]) => `  ${campo.padEnd(ancho)} | ${valor}`).join("\n");
+}
+
+/** Qué cambió en la cartera con la ejecución, en una línea (y el nivel, solo si cambió). */
+function resumenEjecucion({ ticker, sentido, cantidad, precioLimite, carteraAntes, carteraDespues, nivelAntes, nivelDespues }) {
+  const nivel = nivelAntes === nivelDespues ? "" : ` · nivel ${nivelAntes} → ${nivelDespues}`;
+  return `  ${sentido} de ${cantidad} ${ticker} a US$ ${precioLimite.toFixed(2)}: cartera ${carteraAntes} → ${carteraDespues}${nivel}`;
 }
 
 export default registerAlertListeners;
