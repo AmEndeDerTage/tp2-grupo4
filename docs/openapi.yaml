@@ -1,13 +1,18 @@
 openapi: 3.0.3
 info:
   title: API Activos y Órdenes
-  version: 0.5.0
+  version: 0.6.0
   description: |
     API REST en capas (Express + Node) sobre un recorte **hipotético** de un sistema de inversiones en CEDEARs.
     Un **Activo** es un CEDEAR seguido por el sistema (nivel de seguimiento, cantidad en cartera y tope permitido).
     Una **Orden** es una intención de compra o venta sobre un activo, armada para colocarla a mano en el broker.
     Relación **Activo 1 : N Orden** (cada orden tiene su `activoId`). Las reglas de negocio viven en los casos de uso
     y responden 404 o 409 con un código propio (ver cada endpoint).
+
+    Una **Etiqueta** es un rótulo libre para agrupar activos (`dividendos`, `defensivo`). Relación **Activo N : N Etiqueta**
+    a través de la tabla intermedia `activo_etiquetas`: cada vínculo se crea y se borra como subrecurso
+    (`/activos/{id}/etiquetas/{etiquetaId}`), todo activo trae sus etiquetas anidadas y `GET /activos?etiqueta=` filtra
+    por el nombre de una. Borrar una etiqueta la saca de todos los activos; borrar un activo se lleva sus vínculos.
 
     Todos los errores tienen la forma `{ "error": { "code", "message", "details?" } }`.
     La persistencia (`memory` | `sequelize`) se elige por variable de entorno y no cambia las respuestas.
@@ -20,9 +25,11 @@ info:
     (por el canal de `NOTIFIER_TYPE`), con la cartera antes y después. Si un aviso falla, la operación responde igual.
 
     **Transacciones.** Las operaciones que leen, verifican reglas y escriben (alta, edición, borrado y ejecución de
-    órdenes; edición y borrado de activos) corren en una transacción: con pedidos simultáneos, las reglas se cumplen
-    igual en los dos modos de persistencia. La ejecución (`POST /ordenes/{id}/ejecucion`) es la operación atómica:
-    marca la orden y mueve la cartera juntas, o no hace nada.
+    órdenes; alta, edición y borrado de activos; asignar y quitar etiquetas; borrar una etiqueta) corren en una
+    transacción: con pedidos simultáneos, las reglas se cumplen igual en los dos modos de persistencia. Dos son
+    operaciones atómicas de varias escrituras: la ejecución (`POST /ordenes/{id}/ejecucion`) marca la orden y mueve la
+    cartera juntas, y el alta de un activo con `etiquetaIds` crea el activo y sus vínculos juntos; si algo falla, no
+    queda nada.
 
 servers:
   - url: /
@@ -33,6 +40,8 @@ tags:
     description: CEDEARs seguidos por el sistema
   - name: Órdenes
     description: Órdenes de compra o venta sobre un activo (nacen vivas; una ejecutada es historial)
+  - name: Etiquetas
+    description: Rótulos para agrupar activos (relación N:N con la tabla intermedia activo_etiquetas)
 
 paths:
   /activos:
@@ -51,6 +60,16 @@ paths:
           description: Filtra por mercado
           schema:
             $ref: "#/components/schemas/Mercado"
+        - name: etiqueta
+          in: query
+          description: |
+            Filtra por el nombre de una etiqueta (la N:N recorrida desde la etiqueta). Se normaliza como en el alta:
+            `Dividendos` = `dividendos`. Cada activo encontrado trae **todas** sus etiquetas, no solo la buscada.
+            Una etiqueta que no existe no es un error: total 0.
+          schema:
+            type: string
+            pattern: '^[a-z][a-z0-9-]{1,29}$'
+            example: dividendos
         - name: sort
           in: query
           description: Campo de orden; con `-` adelante, descendente
@@ -85,14 +104,18 @@ paths:
                 limit: 20
                 total: 3
                 data:
-                  - { id: 1, ticker: KO, nombre: Coca-Cola, mercado: NYSE, ratio: 5, nivel: L3, cantidad: 40, topeCedears: 100 }
-                  - { id: 2, ticker: AAPL, nombre: Apple, mercado: NASDAQ, ratio: 20, nivel: L2, cantidad: 0, topeCedears: 30 }
-                  - { id: 3, ticker: GGAL, nombre: Grupo Financiero Galicia, mercado: BYMA, ratio: 1, nivel: L1, cantidad: 0, topeCedears: 50 }
+                  - { id: 1, ticker: KO, nombre: Coca-Cola, mercado: NYSE, ratio: 5, nivel: L3, cantidad: 40, topeCedears: 100, etiquetas: [{ id: 1, nombre: dividendos }, { id: 3, nombre: defensivo }] }
+                  - { id: 2, ticker: AAPL, nombre: Apple, mercado: NASDAQ, ratio: 20, nivel: L2, cantidad: 0, topeCedears: 30, etiquetas: [{ id: 2, nombre: tecnologia }] }
+                  - { id: 3, ticker: GGAL, nombre: Grupo Financiero Galicia, mercado: BYMA, ratio: 1, nivel: L1, cantidad: 0, topeCedears: 50, etiquetas: [{ id: 4, nombre: argentina }] }
         "400":
           $ref: "#/components/responses/ErrorValidacion"
     post:
       tags: [Activos]
-      summary: Dar de alta un activo
+      summary: Dar de alta un activo, opcionalmente con sus etiquetas
+      description: |
+        Con `etiquetaIds`, es la **operación atómica de la N:N**: el activo y sus vínculos se escriben en una transacción.
+        Reglas, en este orden: **2** ticker único (409) · todas las etiquetas tienen que existir (404, con las que faltan en
+        `details`). Si algo falla, el activo no queda creado.
       operationId: crearActivo
       requestBody:
         required: true
@@ -107,16 +130,41 @@ paths:
               sinCantidad:
                 summary: Sin cantidad (toma 0 por defecto)
                 value: { ticker: PBR, nombre: Petrobras, mercado: NYSE, ratio: 2, nivel: L1, topeCedears: 80 }
+              conEtiquetas:
+                summary: Con etiquetas (operación atómica)
+                value: { ticker: PG, nombre: Procter & Gamble, mercado: NYSE, ratio: 15, nivel: L1, topeCedears: 20, etiquetaIds: [1, 3] }
+              etiquetaInexistente:
+                summary: Con una etiqueta que no existe → 404 y no se crea nada
+                value: { ticker: JNJ, nombre: Johnson & Johnson, mercado: NYSE, ratio: 15, nivel: L1, topeCedears: 20, etiquetaIds: [3, 999] }
       responses:
         "201":
-          description: Activo creado
+          description: Activo creado, con sus etiquetas
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Activo"
-              example: { id: 4, ticker: MSFT, nombre: Microsoft, mercado: NASDAQ, ratio: 30, nivel: L2, cantidad: 0, topeCedears: 60 }
+              examples:
+                sinEtiquetas:
+                  summary: Sin etiquetaIds
+                  value: { id: 4, ticker: MSFT, nombre: Microsoft, mercado: NASDAQ, ratio: 30, nivel: L2, cantidad: 0, topeCedears: 60, etiquetas: [] }
+                conEtiquetas:
+                  summary: Con etiquetaIds [1, 3]
+                  value: { id: 4, ticker: PG, nombre: Procter & Gamble, mercado: NYSE, ratio: 15, nivel: L1, cantidad: 0, topeCedears: 20, etiquetas: [{ id: 1, nombre: dividendos }, { id: 3, nombre: defensivo }] }
         "400":
           $ref: "#/components/responses/ErrorValidacion"
+        "404":
+          description: Alguna de las etiquetas no existe; el activo no se creó
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                error:
+                  code: ETIQUETA_NO_ENCONTRADA
+                  message: "No existe(n) la(s) etiqueta(s) 998, 999: el activo no se creó"
+                  details:
+                    - { field: etiquetaIds, message: No existe una etiqueta con id 998 }
+                    - { field: etiquetaIds, message: No existe una etiqueta con id 999 }
         "409":
           description: Ya existe un activo con ese ticker (regla de negocio 2)
           content:
@@ -140,7 +188,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Activo"
-              example: { id: 1, ticker: KO, nombre: Coca-Cola, mercado: NYSE, ratio: 5, nivel: L3, cantidad: 40, topeCedears: 100 }
+              example: { id: 1, ticker: KO, nombre: Coca-Cola, mercado: NYSE, ratio: 5, nivel: L3, cantidad: 40, topeCedears: 100, etiquetas: [{ id: 1, nombre: dividendos }, { id: 3, nombre: defensivo }] }
         "400":
           $ref: "#/components/responses/ErrorValidacion"
         "404":
@@ -153,6 +201,7 @@ paths:
         activo · **5 y 6 vistas desde el activo** si cambia `cantidad` o `topeCedears`, lo comprometido en órdenes vivas
         tiene que seguir entrando (la cartera cubre las ventas vivas; cartera + compras vivas ≤ tope).
         Si el cambio toca `cantidad` o `topeCedears` y lo comprometido llega a `TOPE_CERCA_PCT` % del tope, emite `activo.topeCerca`.
+        Las etiquetas no se cambian acá, sino con `POST`/`DELETE /activos/{id}/etiquetas/{etiquetaId}`.
       operationId: actualizarActivo
       requestBody:
         required: true
@@ -174,7 +223,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Activo"
-              example: { id: 3, ticker: GGAL, nombre: Grupo Financiero Galicia, mercado: BYMA, ratio: 1, nivel: L2, cantidad: 0, topeCedears: 50 }
+              example: { id: 3, ticker: GGAL, nombre: Grupo Financiero Galicia, mercado: BYMA, ratio: 1, nivel: L2, cantidad: 0, topeCedears: 50, etiquetas: [{ id: 4, nombre: argentina }] }
         "400":
           $ref: "#/components/responses/ErrorValidacion"
         "404":
@@ -198,7 +247,7 @@ paths:
     delete:
       tags: [Activos]
       summary: Eliminar un activo
-      description: Solo si no tiene órdenes, ni vivas ni ejecutadas (regla 8).
+      description: Solo si no tiene órdenes, ni vivas ni ejecutadas (regla 8). Se lleva sus vínculos con etiquetas.
       operationId: eliminarActivo
       responses:
         "204":
@@ -247,6 +296,94 @@ paths:
           $ref: "#/components/responses/ErrorValidacion"
         "404":
           $ref: "#/components/responses/ActivoNoEncontrado"
+
+  /activos/{id}/etiquetas:
+    parameters:
+      - $ref: "#/components/parameters/ActivoId"
+    get:
+      tags: [Activos, Etiquetas]
+      summary: Listar las etiquetas de un activo (la relación N:N)
+      description: Ordenadas por id. Un activo tiene pocas, así que no se pagina.
+      operationId: listarEtiquetasDeActivo
+      responses:
+        "200":
+          description: Etiquetas del activo (lista vacía si no tiene)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListaEtiquetas"
+              example: [{ id: 1, nombre: dividendos }, { id: 3, nombre: defensivo }]
+        "400":
+          $ref: "#/components/responses/ErrorValidacion"
+        "404":
+          $ref: "#/components/responses/ActivoNoEncontrado"
+
+  /activos/{id}/etiquetas/{etiquetaId}:
+    parameters:
+      - $ref: "#/components/parameters/ActivoId"
+      - $ref: "#/components/parameters/EtiquetaIdVinculo"
+    post:
+      tags: [Activos, Etiquetas]
+      summary: Asignarle una etiqueta a un activo (crear el vínculo)
+      description: Sin body. En una transacción; dos asignaciones simultáneas iguales dan 201 y 409, en los dos modos.
+      operationId: asignarEtiqueta
+      responses:
+        "201":
+          description: Vínculo creado; devuelve las etiquetas del activo después del cambio
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListaEtiquetas"
+              example: [{ id: 1, nombre: dividendos }, { id: 2, nombre: tecnologia }]
+        "400":
+          $ref: "#/components/responses/ErrorValidacion"
+        "404":
+          description: No existe el activo o la etiqueta
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              examples:
+                activo:
+                  summary: El activo no existe
+                  value: { error: { code: ACTIVO_NO_ENCONTRADO, message: No existe un activo con id 999 } }
+                etiqueta:
+                  summary: La etiqueta no existe
+                  value: { error: { code: ETIQUETA_NO_ENCONTRADA, message: No existe una etiqueta con id 999 } }
+        "409":
+          description: El activo ya tiene esa etiqueta
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                error: { code: ETIQUETA_YA_ASIGNADA, message: El activo AAPL ya tiene la etiqueta dividendos }
+    delete:
+      tags: [Activos, Etiquetas]
+      summary: Quitarle una etiqueta a un activo (borrar el vínculo)
+      description: La etiqueta sigue existiendo; solo se borra el vínculo.
+      operationId: quitarEtiqueta
+      responses:
+        "204":
+          description: Vínculo borrado (sin cuerpo)
+        "400":
+          $ref: "#/components/responses/ErrorValidacion"
+        "404":
+          description: No existe el activo, la etiqueta, o el vínculo entre los dos
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              examples:
+                activo:
+                  summary: El activo no existe
+                  value: { error: { code: ACTIVO_NO_ENCONTRADO, message: No existe un activo con id 999 } }
+                etiqueta:
+                  summary: La etiqueta no existe
+                  value: { error: { code: ETIQUETA_NO_ENCONTRADA, message: No existe una etiqueta con id 999 } }
+                vinculo:
+                  summary: El activo no tiene esa etiqueta
+                  value: { error: { code: ETIQUETA_NO_ASIGNADA, message: El activo AAPL no tiene la etiqueta dividendos } }
 
   /ordenes:
     get:
@@ -483,6 +620,119 @@ paths:
                   summary: Regla 5 — la cartera no alcanza para la venta
                   value: { error: { code: CANTIDAD_INSUFICIENTE, "message": "No se puede ejecutar la venta 6 de 5 KO: hay 3 en cartera" } }
 
+  /etiquetas:
+    get:
+      tags: [Etiquetas]
+      summary: Listar etiquetas (orden y paginación)
+      operationId: listarEtiquetas
+      parameters:
+        - $ref: "#/components/parameters/EtiquetaSort"
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Página de etiquetas con metadata
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListadoEtiquetas"
+              example:
+                page: 1
+                limit: 20
+                total: 5
+                data:
+                  - { id: 1, nombre: dividendos }
+                  - { id: 2, nombre: tecnologia }
+                  - { id: 3, nombre: defensivo }
+                  - { id: 4, nombre: argentina }
+                  - { id: 5, nombre: energia }
+        "400":
+          $ref: "#/components/responses/ErrorValidacion"
+    post:
+      tags: [Etiquetas]
+      summary: Crear una etiqueta
+      description: El nombre se normaliza (sin espacios alrededor, en minúsculas) y tiene que ser único.
+      operationId: crearEtiqueta
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EtiquetaCreate"
+            example: { nombre: renta-fija }
+      responses:
+        "201":
+          description: Etiqueta creada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Etiqueta"
+              example: { id: 6, nombre: renta-fija }
+        "400":
+          $ref: "#/components/responses/ErrorValidacion"
+        "409":
+          $ref: "#/components/responses/EtiquetaDuplicada"
+
+  /etiquetas/{id}:
+    parameters:
+      - $ref: "#/components/parameters/EtiquetaId"
+    get:
+      tags: [Etiquetas]
+      summary: Obtener una etiqueta por id
+      operationId: obtenerEtiqueta
+      responses:
+        "200":
+          description: Etiqueta encontrada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Etiqueta"
+              example: { id: 3, nombre: defensivo }
+        "400":
+          $ref: "#/components/responses/ErrorValidacion"
+        "404":
+          $ref: "#/components/responses/EtiquetaNoEncontrada"
+    put:
+      tags: [Etiquetas]
+      summary: Renombrar una etiqueta
+      description: Como los activos la referencian por id, renombrarla la renombra en todos.
+      operationId: actualizarEtiqueta
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EtiquetaUpdate"
+            example: { nombre: bonos }
+      responses:
+        "200":
+          description: Etiqueta actualizada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Etiqueta"
+              example: { id: 6, nombre: bonos }
+        "400":
+          $ref: "#/components/responses/ErrorValidacion"
+        "404":
+          $ref: "#/components/responses/EtiquetaNoEncontrada"
+        "409":
+          $ref: "#/components/responses/EtiquetaDuplicada"
+    delete:
+      tags: [Etiquetas]
+      summary: Eliminar una etiqueta (y sacarla de todos los activos)
+      description: |
+        Una etiqueta en uso se borra igual: en una transacción se quitan sus vínculos y se borra la etiqueta.
+        Un vínculo es una clasificación, no historia (a diferencia de las órdenes de la regla 8).
+      operationId: eliminarEtiqueta
+      responses:
+        "204":
+          description: Eliminada (sin cuerpo)
+        "400":
+          $ref: "#/components/responses/ErrorValidacion"
+        "404":
+          $ref: "#/components/responses/EtiquetaNoEncontrada"
+
 components:
   parameters:
     ActivoId:
@@ -503,6 +753,32 @@ components:
         type: integer
         minimum: 1
         example: 1
+    EtiquetaId:
+      name: id
+      in: path
+      required: true
+      description: Id de la etiqueta (entero positivo)
+      schema:
+        type: integer
+        minimum: 1
+        example: 1
+    EtiquetaIdVinculo:
+      name: etiquetaId
+      in: path
+      required: true
+      description: Id de la etiqueta del vínculo (entero positivo)
+      schema:
+        type: integer
+        minimum: 1
+        example: 1
+    EtiquetaSort:
+      name: sort
+      in: query
+      description: Campo de orden; con `-` adelante, descendente
+      schema:
+        type: string
+        pattern: '^-?(id|nombre)$'
+        example: nombre
     FiltroEstado:
       name: estado
       in: query
@@ -572,6 +848,23 @@ components:
           example:
             error: { code: ORDEN_NO_ENCONTRADA, message: No existe una orden con id 999 }
 
+    EtiquetaNoEncontrada:
+      description: No existe una etiqueta con ese id
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            error: { code: ETIQUETA_NO_ENCONTRADA, message: No existe una etiqueta con id 999 }
+    EtiquetaDuplicada:
+      description: Ya existe otra etiqueta con ese nombre
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            error: { code: ETIQUETA_DUPLICADA, message: Ya existe una etiqueta con el nombre dividendos }
+
   schemas:
     Mercado:
       type: string
@@ -586,7 +879,7 @@ components:
 
     Activo:
       type: object
-      required: [id, ticker, nombre, mercado, ratio, nivel, cantidad, topeCedears]
+      required: [id, ticker, nombre, mercado, ratio, nivel, cantidad, topeCedears, etiquetas]
       properties:
         id:
           type: integer
@@ -620,6 +913,8 @@ components:
           minimum: 1
           description: Máximo de CEDEARs permitido para este activo
           example: 100
+        etiquetas:
+          $ref: "#/components/schemas/ListaEtiquetas"
 
     ActivoCreate:
       type: object
@@ -652,6 +947,17 @@ components:
           type: integer
           minimum: 1
           example: 60
+        etiquetaIds:
+          type: array
+          description: |
+            Etiquetas con las que nace el activo (operación atómica: activo y vínculos, todo o nada).
+            Sin repetir (si no, 400) y todas existentes (si no, 404).
+          maxItems: 10
+          uniqueItems: true
+          items:
+            type: integer
+            minimum: 1
+          example: [1, 3]
 
     ActivoUpdate:
       type: object
@@ -828,6 +1134,65 @@ components:
           items:
             $ref: "#/components/schemas/Orden"
 
+    Etiqueta:
+      type: object
+      required: [id, nombre]
+      properties:
+        id:
+          type: integer
+          description: Identificador autoincremental
+          example: 1
+        nombre:
+          type: string
+          pattern: '^[a-z][a-z0-9-]{1,29}$'
+          description: Único; en minúsculas, sin tildes ni espacios
+          example: dividendos
+
+    ListaEtiquetas:
+      type: array
+      description: Etiquetas de un activo, ordenadas por id
+      items:
+        $ref: "#/components/schemas/Etiqueta"
+
+    EtiquetaCreate:
+      type: object
+      description: Cuerpo de `POST /etiquetas`. El nombre se normaliza (trim y minúsculas) antes de validarlo.
+      required: [nombre]
+      properties:
+        nombre:
+          type: string
+          pattern: '^[a-z][a-z0-9-]{1,29}$'
+          example: renta-fija
+
+    EtiquetaUpdate:
+      type: object
+      description: Cuerpo de `PUT /etiquetas/{id}`. Debe venir al menos un campo.
+      minProperties: 1
+      properties:
+        nombre:
+          type: string
+          pattern: '^[a-z][a-z0-9-]{1,29}$'
+          example: bonos
+
+    ListadoEtiquetas:
+      type: object
+      description: Respuesta paginada
+      required: [page, limit, total, data]
+      properties:
+        page:
+          type: integer
+          example: 1
+        limit:
+          type: integer
+          example: 20
+        total:
+          type: integer
+          example: 5
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Etiqueta"
+
     Error:
       type: object
       required: [error]
@@ -846,7 +1211,9 @@ components:
               example: No existe un activo con id 999
             details:
               type: array
-              description: Solo en errores de validación, un ítem por campo inválido
+              description: |
+                En errores de validación, un ítem por campo inválido. En el alta de un activo con etiquetas que no
+                existen (404), un ítem por etiqueta faltante.
               items:
                 type: object
                 properties:

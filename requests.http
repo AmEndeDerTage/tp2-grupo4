@@ -2,7 +2,7 @@
 ### Documentación interactiva: http://localhost:8000/api-docs
 ### Correrlos EN ORDEN con el servidor recién arrancado y los datos en la semilla: en memoria alcanza con reiniciar;
 ### en sequelize los datos sobreviven al reinicio, así que antes hay que parar el servidor y borrar database.sqlite.
-### Los 75 casos dan lo mismo en los dos modos (PERSISTENCE_TYPE en .env).
+### Los 113 casos dan lo mismo en los dos modos (PERSISTENCE_TYPE en .env).
 ### Los eventos (54 a 75) no cambian las respuestas: se ven en la consola del servidor y en notifications.log.
 ### Los pedidos con "# @name" guardan su respuesta: los siguientes usan el id creado ({{nombre.response.body.$.id}}).
 
@@ -533,3 +533,206 @@ Content-Type: application/json
 {
   "nombre": "Apple Inc."
 }
+
+### ===================== ETIQUETAS =====================
+### Rótulos libres para agrupar activos. El nombre se normaliza (sin espacios alrededor, en minúsculas) y es único.
+
+### 76. Listar etiquetas (semilla: dividendos, tecnologia, defensivo, argentina, energia) → 200 con { page, limit, total, data }
+GET {{base}}/etiquetas
+
+### 77. Ordenadas por nombre, de a 2, página 2 → 200 (dividendos y energia)
+GET {{base}}/etiquetas?sort=nombre&limit=2&page=2
+
+### 78. Orden por un campo que no existe → 400 VALIDATION_ERROR (query)
+GET {{base}}/etiquetas?sort=color
+
+### 79. Obtener una etiqueta por id → 200
+GET {{base}}/etiquetas/3
+
+### 80. Etiqueta inexistente → 404 ETIQUETA_NO_ENCONTRADA
+GET {{base}}/etiquetas/999
+
+### 81. Crear una etiqueta: el nombre se normaliza ("  Renta-Fija " → "renta-fija") → 201
+# @name rentaFija
+POST {{base}}/etiquetas
+Content-Type: application/json
+
+{
+  "nombre": "  Renta-Fija "
+}
+
+### 82. Nombre repetido, aunque cambien las mayúsculas → 409 ETIQUETA_DUPLICADA
+POST {{base}}/etiquetas
+Content-Type: application/json
+
+{
+  "nombre": "DIVIDENDOS"
+}
+
+### 83. Nombre con tilde (va tal cual en la URL del filtro: sin tildes ni espacios) → 400 VALIDATION_ERROR (body)
+POST {{base}}/etiquetas
+Content-Type: application/json
+
+{
+  "nombre": "tecnología"
+}
+
+### 84. Renombrar renta-fija a bonos → 200
+PUT {{base}}/etiquetas/{{rentaFija.response.body.$.id}}
+Content-Type: application/json
+
+{
+  "nombre": "bonos"
+}
+
+### 85. Renombrar con el nombre de otra etiqueta → 409 ETIQUETA_DUPLICADA
+PUT {{base}}/etiquetas/{{rentaFija.response.body.$.id}}
+Content-Type: application/json
+
+{
+  "nombre": "energia"
+}
+
+### 86. PUT sin campos → 400 VALIDATION_ERROR (body)
+PUT {{base}}/etiquetas/{{rentaFija.response.body.$.id}}
+Content-Type: application/json
+
+{}
+
+### ===================== RELACIÓN ACTIVO N:N ETIQUETA (extra) =====================
+### Un activo tiene muchas etiquetas y una etiqueta está en muchos activos: tabla intermedia activo_etiquetas.
+### Cada vínculo es un subrecurso: POST lo crea y DELETE lo borra (/activos/:id/etiquetas/:etiquetaId).
+### Todo activo trae sus etiquetas anidadas. En este punto: KO [dividendos, defensivo] · AAPL (L3) [tecnologia] · GGAL [argentina].
+
+### 87. Las etiquetas de un activo → 200 (KO: dividendos y defensivo)
+GET {{base}}/activos/1/etiquetas
+
+### 88. El activo trae sus etiquetas anidadas → 200 (AAPL con "etiquetas": [tecnologia])
+GET {{base}}/activos/2
+
+### 89. Etiquetas de un activo inexistente → 404 ACTIVO_NO_ENCONTRADO
+GET {{base}}/activos/999/etiquetas
+
+### 90. Asignar dividendos a AAPL → 201 con las etiquetas del activo (dividendos y tecnologia)
+POST {{base}}/activos/2/etiquetas/1
+
+### 91. Asignarla otra vez → 409 ETIQUETA_YA_ASIGNADA
+POST {{base}}/activos/2/etiquetas/1
+
+### 92. Asignar una etiqueta inexistente → 404 ETIQUETA_NO_ENCONTRADA
+POST {{base}}/activos/2/etiquetas/999
+
+### 93. Asignar a un activo inexistente → 404 ACTIVO_NO_ENCONTRADO
+POST {{base}}/activos/999/etiquetas/1
+
+### 94. Id de etiqueta inválido en la URL → 400 VALIDATION_ERROR (params)
+POST {{base}}/activos/2/etiquetas/abc
+
+### 95. Filtrar por etiqueta → 200 (KO y AAPL, cada uno con TODAS sus etiquetas, no solo dividendos)
+GET {{base}}/activos?etiqueta=dividendos
+
+### 96. El filtro normaliza el nombre y se combina con los demás → 200 (solo AAPL, que es L3)
+GET {{base}}/activos?etiqueta=Dividendos&nivel=L3
+
+### 97. Una etiqueta sin activos → 200 con total 0 (un filtro sin resultados no es un 404)
+GET {{base}}/activos?etiqueta=energia
+
+### 98. Nombre de etiqueta mal formado en el filtro → 400 VALIDATION_ERROR (query)
+GET {{base}}/activos?etiqueta=tecnología
+
+### 99. Quitar dividendos de AAPL → 204 (la etiqueta sigue existiendo)
+DELETE {{base}}/activos/2/etiquetas/1
+
+### 100. Quitarla otra vez → 404 ETIQUETA_NO_ASIGNADA
+DELETE {{base}}/activos/2/etiquetas/1
+
+### 101. Quitar una etiqueta inexistente → 404 ETIQUETA_NO_ENCONTRADA
+DELETE {{base}}/activos/2/etiquetas/999
+
+### ===================== OPERACIÓN ATÓMICA SOBRE LA N:N (extra) =====================
+### POST /activos acepta etiquetaIds: el activo y sus vínculos se escriben en UNA transacción, todo o nada.
+
+### 102. Alta de PG con dividendos y defensivo → 201 con sus dos etiquetas anidadas
+# @name pg
+POST {{base}}/activos
+Content-Type: application/json
+
+{
+  "ticker": "PG",
+  "nombre": "Procter & Gamble",
+  "mercado": "NYSE",
+  "ratio": 15,
+  "nivel": "L1",
+  "topeCedears": 20,
+  "etiquetaIds": [1, 3]
+}
+
+### 103. Alta de JNJ con una etiqueta que existe y dos que no → 404 ETIQUETA_NO_ENCONTRADA (details con las dos que faltan)
+POST {{base}}/activos
+Content-Type: application/json
+
+{
+  "ticker": "JNJ",
+  "nombre": "Johnson & Johnson",
+  "mercado": "NYSE",
+  "ratio": 15,
+  "nivel": "L1",
+  "topeCedears": 20,
+  "etiquetaIds": [3, 998, 999]
+}
+
+### 104. JNJ no quedó creado (todo o nada) → 200: defensivo la tienen KO y PG, sin JNJ
+GET {{base}}/activos?etiqueta=defensivo
+
+### 105. Etiquetas repetidas en el alta → 400 VALIDATION_ERROR (body: se decide mirando solo el pedido)
+POST {{base}}/activos
+Content-Type: application/json
+
+{
+  "ticker": "JNJ",
+  "nombre": "Johnson & Johnson",
+  "mercado": "NYSE",
+  "ratio": 15,
+  "nivel": "L1",
+  "topeCedears": 20,
+  "etiquetaIds": [1, 1]
+}
+
+### 106. Alta sin etiquetaIds, como antes → 201 con "etiquetas": []
+# @name xom
+POST {{base}}/activos
+Content-Type: application/json
+
+{
+  "ticker": "XOM",
+  "nombre": "Exxon Mobil",
+  "mercado": "NYSE",
+  "ratio": 5,
+  "nivel": "L1",
+  "topeCedears": 20
+}
+
+### ===================== BORRAR EN LA N:N =====================
+### Borrar una etiqueta en uso la saca de todos los activos (un vínculo es una clasificación, no historia: no es la
+### regla 8). Borrar un activo sin órdenes se lleva sus vínculos.
+
+### 107. Borrar defensivo, que la tienen KO y PG → 204 (en una transacción: sus vínculos y la etiqueta)
+DELETE {{base}}/etiquetas/3
+
+### 108. KO quedó solo con dividendos → 200
+GET {{base}}/activos/1/etiquetas
+
+### 109. Borrar PG (sin órdenes) → 204: se lleva sus vínculos
+DELETE {{base}}/activos/{{pg.response.body.$.id}}
+
+### 110. Dividendos ya no está en PG → 200 (solo KO)
+GET {{base}}/activos?etiqueta=dividendos
+
+### 111. Borrar XOM → 204
+DELETE {{base}}/activos/{{xom.response.body.$.id}}
+
+### 112. Borrar la etiqueta bonos → 204
+DELETE {{base}}/etiquetas/{{rentaFija.response.body.$.id}}
+
+### 113. Etiquetas al final → 200 (dividendos, tecnologia, argentina, energia)
+GET {{base}}/etiquetas
