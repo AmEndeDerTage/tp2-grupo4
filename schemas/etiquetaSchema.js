@@ -57,4 +57,7 @@ const etiquetaIdParamSchema = z.object({
   id: z.coerce.number({ error: "El id debe ser un número" }).int("El id debe ser un número entero").positive("El id debe ser positivo"),
 });
 
-export { createEtiquetaSchema, updateEtiquetaSchema, queryEtiquetasSchema, etiquetaIdParamSchema, CAMPOS_ORDENABLES };
+// El campo nombre se exporta para que el filtro GET /activos?etiqueta= lo valide y normalice igual que el alta
+const nombreEtiqueta = campos.nombre;
+
+export { createEtiquetaSchema, updateEtiquetaSchema, queryEtiquetasSchema, etiquetaIdParamSchema, nombreEtiqueta, CAMPOS_ORDENABLES };

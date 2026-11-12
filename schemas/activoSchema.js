@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { nombreEtiqueta } from "./etiquetaSchema.js";
 
 /**
  * Esquemas de validación de Activo (Zod).
@@ -59,9 +60,12 @@ const updateActivoSchema = z
   .refine((data) => Object.keys(data).length > 0, { error: "Hay que enviar al menos un campo para actualizar" });
 
 // GET /activos: filtros, orden y paginación. Todo llega como texto en la URL, por eso z.coerce.
+// `etiqueta` filtra por el nombre de una etiqueta (la N:N recorrida desde la etiqueta), normalizado como en su alta:
+// ?etiqueta=Dividendos es lo mismo que ?etiqueta=dividendos.
 const queryActivosSchema = z.object({
   nivel: campos.nivel.optional(),
   mercado: campos.mercado.optional(),
+  etiqueta: nombreEtiqueta.optional(),
   sort: z
     .string()
     .regex(

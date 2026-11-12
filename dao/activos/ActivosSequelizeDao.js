@@ -1,4 +1,4 @@
-import { UniqueConstraintError } from "sequelize";
+import { UniqueConstraintError, Op } from "sequelize";
 import { sequelize, ActivoModel, EtiquetaModel, ActivoEtiquetaModel } from "../models/index.js";
 import { SEMILLA_ACTIVOS } from "../semilla.js";
 import AppError from "../../errors/AppError.js";
@@ -40,13 +40,24 @@ class ActivosSequelizeDao {
 
   /**
    * Lista activos: los filtros, el orden y la paginación los resuelve la base (WHERE / ORDER BY / LIMIT).
-   * filtros: { nivel, mercado, sort ("ticker" | "-ticker"), page, limit }
+   * filtros: { nivel, mercado, etiqueta (nombre), sort ("ticker" | "-ticker"), page, limit }
    * Devuelve { items, total }: `total` es la cantidad que cumple los filtros ANTES de paginar.
+   *
+   * El filtro por etiqueta va en dos pasos. La forma «obvia», un `where` con el nombre dentro del include de las
+   * etiquetas, filtra bien los activos pero RECORTA las etiquetas anidadas a la buscada (probado: KO salía solo con
+   * «dividendos» y perdía «defensivo»), y los dos modos responderían distinto. Por eso:
+   *   1. desde la etiqueta, los ids de sus activos: etiqueta.getActivos(), el belongsToMany en el otro sentido;
+   *   2. esos activos (WHERE id IN (...)), cada uno con todas sus etiquetas.
    */
-  async getAll({ nivel, mercado, sort, page = 1, limit } = {}) {
+  async getAll({ nivel, mercado, etiqueta, sort, page = 1, limit } = {}) {
     const where = {};
     if (nivel !== undefined) where.nivel = nivel;
     if (mercado !== undefined) where.mercado = mercado;
+    if (etiqueta !== undefined) {
+      const buscada = await EtiquetaModel.findOne({ where: { nombre: etiqueta }, attributes: ["id"] });
+      const activos = buscada ? await buscada.getActivos({ attributes: ["id"], joinTableAttributes: [] }) : [];
+      where.id = { [Op.in]: activos.map((a) => a.id) }; // una etiqueta que no existe → ningún activo (total 0)
+    }
 
     const order = [["id", "ASC"], ORDEN_ETIQUETAS]; // Desempate estable por id, igual que en memoria
     if (sort) order.unshift([sort.replace(/^-/, ""), sort.startsWith("-") ? "DESC" : "ASC"]);

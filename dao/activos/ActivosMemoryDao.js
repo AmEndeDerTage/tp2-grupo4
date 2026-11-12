@@ -37,13 +37,24 @@ class ActivosMemoryDao {
 
   /**
    * Lista activos con filtros, orden y paginación: el equivalente en memoria de WHERE / ORDER BY / LIMIT.
-   * filtros: { nivel, mercado, sort ("ticker" | "-ticker"), page, limit }
+   * filtros: { nivel, mercado, etiqueta (nombre), sort ("ticker" | "-ticker"), page, limit }
    * Devuelve { items, total }: `total` es la cantidad que cumple los filtros ANTES de paginar,
    * para que el caso de uso pueda armar la metadata de paginación.
+   * Con `etiqueta`, quedan los activos que la tienen, cada uno con TODAS sus etiquetas anidadas. Una etiqueta que no
+   * existe no es un error: el filtro no encuentra nada (total 0), como un nivel sin activos.
    */
-  async getAll({ nivel, mercado, sort, page = 1, limit } = {}) {
+  async getAll({ nivel, mercado, etiqueta, sort, page = 1, limit } = {}) {
+    let conEtiqueta = null; // ids de los activos que tienen la etiqueta pedida (null = sin ese filtro)
+    if (etiqueta !== undefined) {
+      const buscada = await this.#etiquetasDao.getByNombre(etiqueta);
+      conEtiqueta = new Set(buscada ? this.#vinculos.filter((v) => v.etiquetaId === buscada.id).map((v) => v.activoId) : []);
+    }
+
     let resultado = this.#activos.filter(
-      (a) => (nivel === undefined || a.nivel === nivel) && (mercado === undefined || a.mercado === mercado)
+      (a) =>
+        (nivel === undefined || a.nivel === nivel) &&
+        (mercado === undefined || a.mercado === mercado) &&
+        (conEtiqueta === null || conEtiqueta.has(a.id))
     );
     const total = resultado.length;
 
