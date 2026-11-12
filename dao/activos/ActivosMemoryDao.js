@@ -1,4 +1,5 @@
-import { SEMILLA_ACTIVOS } from "../semilla.js";
+import { SEMILLA_ACTIVOS, SEMILLA_ACTIVO_ETIQUETAS } from "../semilla.js";
+import etiquetasMemoryDao from "../etiquetas/EtiquetasMemoryDao.js";
 
 /**
  * Adaptador DAO en memoria para Activos.
@@ -7,16 +8,24 @@ import { SEMILLA_ACTIVOS } from "../semilla.js";
  * Devuelve siempre copias ({ ...x }): nadie de afuera puede modificar el estado interno por accidente.
  * Los métodos que se usan dentro de una transacción reciben un `_tx` al final, por simetría con Sequelize, y lo ignoran:
  * en memoria no hay transacción que pasar (ver dao/transacciones.js).
+ *
+ * Relación N:N con Etiquetas: los vínculos (el equivalente de la tabla intermedia activo_etiquetas) viven acá, en un
+ * array de pares { activoId, etiquetaId }, porque el vínculo se maneja como «las etiquetas del activo». Para devolver
+ * el nombre de cada etiqueta colabora con el DAO de Etiquetas en memoria, inyectado por constructor (como Órdenes con Activos).
  */
 
 class ActivosMemoryDao {
   // Campos privados (ES2022): no se pueden leer ni modificar desde fuera de la clase
   #activos;
   #nextId;
+  #vinculos;
+  #etiquetasDao;
 
-  constructor(activosIniciales = SEMILLA_ACTIVOS) {
+  constructor(activosIniciales = SEMILLA_ACTIVOS, vinculosIniciales = SEMILLA_ACTIVO_ETIQUETAS, etiquetasDao = etiquetasMemoryDao) {
     this.#activos = activosIniciales.map((a) => ({ ...a }));
     this.#nextId = this.#activos.reduce((max, a) => (a.id > max ? a.id : max), 0) + 1;
+    this.#vinculos = vinculosIniciales.map((v) => ({ ...v }));
+    this.#etiquetasDao = etiquetasDao;
   }
 
   /**
@@ -94,12 +103,28 @@ class ActivosMemoryDao {
     return { ...activo };
   }
 
-  // Devuelve true si borró, false si no existía
+  /**
+   * Las etiquetas de un activo, ordenadas por id: [{ id, nombre }]. Lista vacía si no tiene (o si el activo no existe:
+   * de eso se ocupa el caso de uso). Recorre la N:N desde el lado del activo, como activo.getEtiquetas() en Sequelize.
+   */
+  async getEtiquetas(activoId, _tx) {
+    const ids = this.#vinculos
+      .filter((v) => v.activoId === Number(activoId))
+      .map((v) => v.etiquetaId)
+      .sort((a, b) => a - b);
+    const etiquetas = await Promise.all(ids.map((etiquetaId) => this.#etiquetasDao.getById(etiquetaId)));
+    return etiquetas.filter(Boolean).map(({ id, nombre }) => ({ id, nombre }));
+  }
+
+  // Devuelve true si borró, false si no existía.
+  // Se lleva sus vínculos con etiquetas, como el ON DELETE CASCADE de activo_etiquetas en la base: un vínculo colgado
+  // de un activo que ya no existe haría que los dos modos respondan distinto.
   async delete(id, _tx) {
     const indice = this.#activos.findIndex((a) => a.id === Number(id));
     if (indice === -1) return false;
 
     this.#activos.splice(indice, 1);
+    this.#vinculos = this.#vinculos.filter((v) => v.activoId !== Number(id));
     return true;
   }
 }

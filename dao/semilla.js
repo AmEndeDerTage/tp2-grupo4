@@ -27,4 +27,12 @@ const SEMILLA_ETIQUETAS = [
   { id: 5, nombre: "energia" },
 ];
 
-export { SEMILLA_ACTIVOS, SEMILLA_ORDENES, SEMILLA_ETIQUETAS };
+// Vínculos de la tabla intermedia (activo N:N etiqueta): KO es «dividendos» y «defensivo», AAPL «tecnologia», GGAL «argentina»
+const SEMILLA_ACTIVO_ETIQUETAS = [
+  { activoId: 1, etiquetaId: 1 },
+  { activoId: 1, etiquetaId: 3 },
+  { activoId: 2, etiquetaId: 2 },
+  { activoId: 3, etiquetaId: 4 },
+];
+
+export { SEMILLA_ACTIVOS, SEMILLA_ORDENES, SEMILLA_ETIQUETAS, SEMILLA_ACTIVO_ETIQUETAS };

@@ -1,6 +1,6 @@
 import { UniqueConstraintError } from "sequelize";
-import { EtiquetaModel } from "../models/index.js";
-import { SEMILLA_ETIQUETAS } from "../semilla.js";
+import { EtiquetaModel, ActivoEtiquetaModel } from "../models/index.js";
+import { SEMILLA_ETIQUETAS, SEMILLA_ACTIVO_ETIQUETAS } from "../semilla.js";
 import AppError from "../../errors/AppError.js";
 
 // Columnas pedidas explícitamente, en el mismo orden en que las devuelve el DAO en memoria
@@ -12,11 +12,16 @@ const ATRIBUTOS = ["id", "nombre"];
  * Los métodos que se usan dentro de una transacción reciben un `tx` opcional al final y lo pasan a cada consulta.
  */
 class EtiquetasSequelizeDao {
-  // Siembra si la tabla está vacía
+  /**
+   * Siembra si la tabla está vacía: las etiquetas y, con ellas, los vínculos de la tabla intermedia.
+   * Va después de la semilla de Activos (el container inicializa Activos primero): las claves foráneas de
+   * activo_etiquetas exigen que existan los dos extremos.
+   */
   async init() {
     const cantidad = await EtiquetaModel.count();
     if (cantidad === 0) {
       await EtiquetaModel.bulkCreate(SEMILLA_ETIQUETAS);
+      await ActivoEtiquetaModel.bulkCreate(SEMILLA_ACTIVO_ETIQUETAS);
     }
   }
 

@@ -91,7 +91,24 @@ class ActivosSequelizeDao {
     }
   }
 
-  // Devuelve true si borró, false si no existía
+  /**
+   * Las etiquetas de un activo, ordenadas por id: [{ id, nombre }]. Lista vacía si no tiene (o si el activo no existe).
+   * activo.getEtiquetas() es uno de los métodos que genera belongsToMany; joinTableAttributes: [] evita que cada etiqueta
+   * traiga además la fila de la tabla intermedia.
+   */
+  async getEtiquetas(activoId, tx) {
+    const activo = await ActivoModel.findByPk(activoId, { attributes: ["id"], transaction: tx });
+    if (!activo) return [];
+    const etiquetas = await activo.getEtiquetas({
+      attributes: ["id", "nombre"],
+      joinTableAttributes: [],
+      order: [["id", "ASC"]],
+      transaction: tx,
+    });
+    return etiquetas.map((e) => e.get({ plain: true }));
+  }
+
+  // Devuelve true si borró, false si no existía. Sus vínculos con etiquetas los borra la base (ON DELETE CASCADE)
   async delete(id, tx) {
     const borrados = await ActivoModel.destroy({ where: { id }, transaction: tx });
     return borrados > 0;
