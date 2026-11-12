@@ -3,6 +3,8 @@ import activosMemoryDao from "./activos/ActivosMemoryDao.js";
 import activosSequelizeDao from "./activos/ActivosSequelizeDao.js";
 import ordenesMemoryDao from "./ordenes/OrdenesMemoryDao.js";
 import ordenesSequelizeDao from "./ordenes/OrdenesSequelizeDao.js";
+import etiquetasMemoryDao from "./etiquetas/EtiquetasMemoryDao.js";
+import etiquetasSequelizeDao from "./etiquetas/EtiquetasSequelizeDao.js";
 import { transaccionEnMemoria, transaccionSequelize } from "./transacciones.js";
 
 /**
@@ -30,6 +32,15 @@ function getOrdenesDao() {
   return ordenesMemoryDao;
 }
 
+function getEtiquetasDao() {
+  if (PERSISTENCE_TYPE === "sequelize") {
+    console.log("[Persistencia] Etiquetas: Sequelize (SQLite)");
+    return etiquetasSequelizeDao;
+  }
+  console.log("[Persistencia] Etiquetas: memoria (array JS)");
+  return etiquetasMemoryDao;
+}
+
 /**
  * La forma de correr un trabajo como una sola operación (ver transacciones.js), elegida con el mismo criterio
  * que los DAOs: los casos de uso la reciben inyectada y no saben si detrás hay un array o una base.
@@ -43,4 +54,4 @@ function getTransaccion() {
   return transaccionEnMemoria;
 }
 
-export { getActivosDao, getOrdenesDao, getTransaccion };
+export { getActivosDao, getOrdenesDao, getEtiquetasDao, getTransaccion };
