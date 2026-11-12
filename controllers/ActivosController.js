@@ -60,6 +60,20 @@ class ActivosController {
     if (!etiquetas) throw new AppError("ACTIVO_NO_ENCONTRADO", `No existe un activo con id ${req.params.id}`, 404);
     res.json(etiquetas);
   };
+
+  // POST /activos/:id/etiquetas/:etiquetaId → 201 con las etiquetas del activo (se creó un vínculo)
+  asignarEtiqueta = async (req, res) => {
+    const etiquetas = await this.#useCases.asignarEtiqueta(req.params.id, req.params.etiquetaId);
+    if (!etiquetas) throw new AppError("ACTIVO_NO_ENCONTRADO", `No existe un activo con id ${req.params.id}`, 404);
+    res.status(201).json(etiquetas);
+  };
+
+  // DELETE /activos/:id/etiquetas/:etiquetaId → 204 sin cuerpo (se borró el vínculo; la etiqueta sigue existiendo)
+  quitarEtiqueta = async (req, res) => {
+    const quitada = await this.#useCases.quitarEtiqueta(req.params.id, req.params.etiquetaId);
+    if (!quitada) throw new AppError("ACTIVO_NO_ENCONTRADO", `No existe un activo con id ${req.params.id}`, 404);
+    res.status(204).send();
+  };
 }
 
 // Se exporta la clase, no una instancia: quien la instancia (con los casos de uso inyectados) es el container

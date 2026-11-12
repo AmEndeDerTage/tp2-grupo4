@@ -54,9 +54,10 @@ async function buildContainer() {
 
   // 3. Casos de uso con sus dependencias inyectadas
   // Cada entidad recibe también el DAO de la otra: Activos lo usa para la regla 8 y Órdenes para las reglas sobre el activo.
+  // Activos recibe además el de Etiquetas, para asignar y quitar etiquetas (la N:N).
   // Las dos reciben la misma forma de transacción, elegida por la factory igual que los DAOs.
   const transaccion = getTransaccion();
-  const activoUseCases = makeActivoUseCases({ activosDao, ordenesDao, events, transaccion });
+  const activoUseCases = makeActivoUseCases({ activosDao, ordenesDao, etiquetasDao, events, transaccion });
   const ordenUseCases = makeOrdenUseCases({ ordenesDao, activosDao, events, transaccion });
   const etiquetaUseCases = makeEtiquetaUseCases({ etiquetasDao });
 

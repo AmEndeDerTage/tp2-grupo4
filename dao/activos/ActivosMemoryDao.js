@@ -125,6 +125,35 @@ class ActivosMemoryDao {
     return etiquetas.filter(Boolean).map(({ id, nombre }) => ({ id, nombre }));
   }
 
+  // ¿El activo tiene esa etiqueta? (el caso de uso lo pregunta para responder ETIQUETA_YA_ASIGNADA / ETIQUETA_NO_ASIGNADA)
+  async tieneEtiqueta(activoId, etiquetaId, _tx) {
+    return this.#vinculos.some((v) => v.activoId === Number(activoId) && v.etiquetaId === Number(etiquetaId));
+  }
+
+  /**
+   * Crea el vínculo activo–etiqueta. Las reglas (que el activo y la etiqueta existan, que no esté ya asignada) las verifica
+   * el caso de uso; acá quedan como segunda barrera, igual que la clave foránea y la clave primaria compuesta de la base:
+   * si se saltearan, en los dos modos el vínculo no se crea y el error termina en 500.
+   */
+  async asignarEtiqueta(activoId, etiquetaId, _tx) {
+    if (!this.#activos.some((a) => a.id === Number(activoId)) || !(await this.#etiquetasDao.getById(etiquetaId))) {
+      throw new Error(`Vínculo inválido: no existe el activo ${activoId} o la etiqueta ${etiquetaId} (clave foránea)`);
+    }
+    if (await this.tieneEtiqueta(activoId, etiquetaId)) {
+      throw new Error(`Vínculo repetido: el activo ${activoId} ya tiene la etiqueta ${etiquetaId} (clave primaria)`);
+    }
+    this.#vinculos.push({ activoId: Number(activoId), etiquetaId: Number(etiquetaId) });
+  }
+
+  // Borra el vínculo. Devuelve true si lo borró, false si no existía.
+  async quitarEtiqueta(activoId, etiquetaId, _tx) {
+    const indice = this.#vinculos.findIndex((v) => v.activoId === Number(activoId) && v.etiquetaId === Number(etiquetaId));
+    if (indice === -1) return false;
+
+    this.#vinculos.splice(indice, 1);
+    return true;
+  }
+
   // Devuelve true si borró, false si no existía.
   // Se lleva sus vínculos con etiquetas, como el ON DELETE CASCADE de activo_etiquetas en la base: un vínculo colgado
   // de un activo que ya no existe haría que los dos modos respondan distinto.

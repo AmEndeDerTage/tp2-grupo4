@@ -1,5 +1,5 @@
 import { UniqueConstraintError } from "sequelize";
-import { sequelize, ActivoModel, EtiquetaModel } from "../models/index.js";
+import { sequelize, ActivoModel, EtiquetaModel, ActivoEtiquetaModel } from "../models/index.js";
 import { SEMILLA_ACTIVOS } from "../semilla.js";
 import AppError from "../../errors/AppError.js";
 
@@ -118,6 +118,27 @@ class ActivosSequelizeDao {
       transaction: tx,
     });
     return etiquetas.map((e) => e.get({ plain: true }));
+  }
+
+  // ¿El activo tiene esa etiqueta? (el caso de uso lo pregunta para responder ETIQUETA_YA_ASIGNADA / ETIQUETA_NO_ASIGNADA)
+  async tieneEtiqueta(activoId, etiquetaId, tx) {
+    const cantidad = await ActivoEtiquetaModel.count({ where: { activoId, etiquetaId }, transaction: tx });
+    return cantidad > 0;
+  }
+
+  /**
+   * Crea el vínculo: una fila en la tabla intermedia. Se escribe con su modelo y no con activo.addEtiqueta(): el método
+   * que genera belongsToMany IGNORA EN SILENCIO un vínculo que ya existe (probado), y acá se quiere lo contrario: que la
+   * clave primaria compuesta y la clave foránea frenen un vínculo repetido o inválido si la regla se salteara.
+   */
+  async asignarEtiqueta(activoId, etiquetaId, tx) {
+    await ActivoEtiquetaModel.create({ activoId, etiquetaId }, { transaction: tx });
+  }
+
+  // Borra el vínculo. Devuelve true si lo borró, false si no existía.
+  async quitarEtiqueta(activoId, etiquetaId, tx) {
+    const borrados = await ActivoEtiquetaModel.destroy({ where: { activoId, etiquetaId }, transaction: tx });
+    return borrados > 0;
   }
 
   // Devuelve true si borró, false si no existía. Sus vínculos con etiquetas los borra la base (ON DELETE CASCADE)

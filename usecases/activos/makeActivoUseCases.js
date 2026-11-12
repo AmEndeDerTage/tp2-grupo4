@@ -5,6 +5,8 @@ import updateActivo from "./updateActivo.js";
 import deleteActivo from "./deleteActivo.js";
 import getOrdenesDeActivo from "./getOrdenesDeActivo.js";
 import getEtiquetasDeActivo from "./getEtiquetasDeActivo.js";
+import asignarEtiqueta from "./asignarEtiqueta.js";
+import quitarEtiqueta from "./quitarEtiqueta.js";
 
 /**
  * Factory de casos de uso de Activos.
@@ -13,11 +15,12 @@ import getEtiquetasDeActivo from "./getEtiquetasDeActivo.js";
  *  - ordenesDao: el de la entidad relacionada, para la regla 8 (no borrar un activo con órdenes),
  *    para recorrer la relación (GET /activos/:id/ordenes) y para que updateActivo verifique lo comprometido
  *    en órdenes vivas (reglas 5 y 6 vistas desde el activo)
+ *  - etiquetasDao: el del otro lado de la N:N Activo–Etiqueta, para verificar que exista la etiqueta que se asigna o se quita
  *  - events: el bus de eventos, para que updateActivo avise activo.topeCerca (clase 10)
  *  - transaccion: cómo correr leer-verificar-escribir como una sola operación (dao/transacciones.js)
  * y devuelve los casos de uso con ellas ya inyectadas, para que el controlador los llame sin conocer ningún DAO.
  */
-function makeActivoUseCases({ activosDao, ordenesDao, events, transaccion }) {
+function makeActivoUseCases({ activosDao, ordenesDao, etiquetasDao, events, transaccion }) {
   return {
     getActivos: (filtros) => getActivos(filtros, activosDao),
     getActivoById: (id) => getActivoById(id, activosDao),
@@ -26,6 +29,8 @@ function makeActivoUseCases({ activosDao, ordenesDao, events, transaccion }) {
     deleteActivo: (id) => deleteActivo(id, activosDao, ordenesDao, transaccion),
     getOrdenesDeActivo: (id, filtros) => getOrdenesDeActivo(id, filtros, activosDao, ordenesDao),
     getEtiquetasDeActivo: (id) => getEtiquetasDeActivo(id, activosDao),
+    asignarEtiqueta: (id, etiquetaId) => asignarEtiqueta(id, etiquetaId, activosDao, etiquetasDao, transaccion),
+    quitarEtiqueta: (id, etiquetaId) => quitarEtiqueta(id, etiquetaId, activosDao, etiquetasDao, transaccion),
   };
 }
 

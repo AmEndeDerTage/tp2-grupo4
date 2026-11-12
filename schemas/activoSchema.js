@@ -83,4 +83,12 @@ const activoIdParamSchema = z.object({
   id: z.coerce.number({ error: "El id debe ser un número" }).int("El id debe ser un número entero").positive("El id debe ser positivo"),
 });
 
-export { createActivoSchema, updateActivoSchema, queryActivosSchema, activoIdParamSchema, MERCADOS, NIVELES, CAMPOS_ORDENABLES };
+// Parámetros de ruta de un vínculo de la N:N (POST y DELETE /activos/:id/etiquetas/:etiquetaId)
+const activoEtiquetaParamSchema = activoIdParamSchema.extend({
+  etiquetaId: z.coerce
+    .number({ error: "El id de la etiqueta debe ser un número" })
+    .int("El id de la etiqueta debe ser un número entero")
+    .positive("El id de la etiqueta debe ser positivo"),
+});
+
+export { createActivoSchema, updateActivoSchema, queryActivosSchema, activoIdParamSchema, activoEtiquetaParamSchema, MERCADOS, NIVELES, CAMPOS_ORDENABLES };

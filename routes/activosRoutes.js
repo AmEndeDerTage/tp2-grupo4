@@ -5,6 +5,7 @@ import {
   updateActivoSchema,
   queryActivosSchema,
   activoIdParamSchema,
+  activoEtiquetaParamSchema,
 } from "../schemas/activoSchema.js";
 import { queryOrdenesDeActivoSchema } from "../schemas/ordenSchema.js";
 
@@ -26,6 +27,9 @@ function createActivosRouter(controller) {
   router.get("/:id/ordenes", validateParams(activoIdParamSchema), validateQuery(queryOrdenesDeActivoSchema), controller.listOrdenes);
   // Relación Activo N:N Etiqueta: las etiquetas de un activo
   router.get("/:id/etiquetas", validateParams(activoIdParamSchema), controller.listEtiquetas);
+  // Cada vínculo es un subrecurso: se crea con POST y se borra con DELETE, sin body
+  router.post("/:id/etiquetas/:etiquetaId", validateParams(activoEtiquetaParamSchema), controller.asignarEtiqueta);
+  router.delete("/:id/etiquetas/:etiquetaId", validateParams(activoEtiquetaParamSchema), controller.quitarEtiqueta);
 
   return router;
 }
