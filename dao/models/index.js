@@ -1,6 +1,7 @@
 import { sequelize } from "../../connection/index.js";
 import ActivoModel from "./ActivoModel.js";
 import OrdenModel from "./OrdenModel.js";
+import EtiquetaModel from "./EtiquetaModel.js";
 
 // -----------------------------------------------------------------------------
 // ASOCIACIONES: acá se centraliza cómo se relacionan las tablas
@@ -16,4 +17,4 @@ ActivoModel.hasMany(OrdenModel, { foreignKey: "activoId", as: "ordenes", onDelet
 OrdenModel.belongsTo(ActivoModel, { foreignKey: "activoId", as: "activo", onDelete: "RESTRICT" });
 
 // Exportamos la conexión (para sync) y los modelos ya asociados: los DAOs importan siempre desde este archivo
-export { sequelize, ActivoModel, OrdenModel };
+export { sequelize, ActivoModel, OrdenModel, EtiquetaModel };

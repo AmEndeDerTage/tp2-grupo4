@@ -18,4 +18,13 @@ const SEMILLA_ORDENES = [
   { id: 3, activoId: 2, sentido: "compra", cantidad: 10, precioLimite: 12.5, validaHasta: "2026-11-27", estado: "viva", motivo: null },
 ];
 
-export { SEMILLA_ACTIVOS, SEMILLA_ORDENES };
+// Etiquetas para agrupar activos (relación N:N). «energia» arranca sin activos: sirve para probar el borrado.
+const SEMILLA_ETIQUETAS = [
+  { id: 1, nombre: "dividendos" },
+  { id: 2, nombre: "tecnologia" },
+  { id: 3, nombre: "defensivo" },
+  { id: 4, nombre: "argentina" },
+  { id: 5, nombre: "energia" },
+];
+
+export { SEMILLA_ACTIVOS, SEMILLA_ORDENES, SEMILLA_ETIQUETAS };
