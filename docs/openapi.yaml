@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: API Activos y Órdenes
-  version: 0.6.0
+  version: 0.7.0
   description: |
     API REST en capas (Express + Node) sobre un recorte **hipotético** de un sistema de inversiones en CEDEARs.
     Un **Activo** es un CEDEAR seguido por el sistema (nivel de seguimiento, cantidad en cartera y tope permitido).
@@ -10,9 +10,12 @@ info:
     y responden 404 o 409 con un código propio (ver cada endpoint).
 
     Una **Etiqueta** es un rótulo libre para agrupar activos (`dividendos`, `defensivo`). Relación **Activo N : N Etiqueta**
-    a través de la tabla intermedia `activo_etiquetas`: cada vínculo se crea y se borra como subrecurso
+    a través de la tabla intermedia `activo_etiquetas`: cada vínculo se consulta, se crea y se borra como subrecurso
     (`/activos/{id}/etiquetas/{etiquetaId}`), todo activo trae sus etiquetas anidadas y `GET /activos?etiqueta=` filtra
     por el nombre de una. Borrar una etiqueta la saca de todos los activos; borrar un activo se lleva sus vínculos.
+
+    Todo `POST` que crea algo responde **201 con el header `Location`**: la URL de lo creado, donde un `GET` lo devuelve
+    (`/activos/4`, `/ordenes/4`, `/etiquetas/6`; al asignar una etiqueta, la del vínculo: `/activos/2/etiquetas/1`).
 
     Todos los errores tienen la forma `{ "error": { "code", "message", "details?" } }`.
     La persistencia (`memory` | `sequelize`) se elige por variable de entorno y no cambia las respuestas.
@@ -138,7 +141,10 @@ paths:
                 value: { ticker: JNJ, nombre: Johnson & Johnson, mercado: NYSE, ratio: 15, nivel: L1, topeCedears: 20, etiquetaIds: [3, 999] }
       responses:
         "201":
-          description: Activo creado, con sus etiquetas
+          description: Activo creado, con sus etiquetas. `Location` = `/activos/{id}`
+          headers:
+            Location:
+              $ref: "#/components/headers/Location"
           content:
             application/json:
               schema:
@@ -322,6 +328,23 @@ paths:
     parameters:
       - $ref: "#/components/parameters/ActivoId"
       - $ref: "#/components/parameters/EtiquetaIdVinculo"
+    get:
+      tags: [Activos, Etiquetas]
+      summary: Consultar un vínculo (¿el activo tiene esta etiqueta?)
+      description: Es la URL que devuelve el header `Location` al asignar la etiqueta. Mismos chequeos, y en el mismo orden, que al quitarla.
+      operationId: obtenerEtiquetaDeActivo
+      responses:
+        "200":
+          description: El activo tiene la etiqueta; devuelve la etiqueta
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Etiqueta"
+              example: { id: 1, nombre: dividendos }
+        "400":
+          $ref: "#/components/responses/ErrorValidacion"
+        "404":
+          $ref: "#/components/responses/VinculoNoEncontrado"
     post:
       tags: [Activos, Etiquetas]
       summary: Asignarle una etiqueta a un activo (crear el vínculo)
@@ -329,7 +352,10 @@ paths:
       operationId: asignarEtiqueta
       responses:
         "201":
-          description: Vínculo creado; devuelve las etiquetas del activo después del cambio
+          description: Vínculo creado; devuelve las etiquetas del activo después del cambio. `Location` = la URL del vínculo, `/activos/{id}/etiquetas/{etiquetaId}`
+          headers:
+            Location:
+              $ref: "#/components/headers/Location"
           content:
             application/json:
               schema:
@@ -369,21 +395,7 @@ paths:
         "400":
           $ref: "#/components/responses/ErrorValidacion"
         "404":
-          description: No existe el activo, la etiqueta, o el vínculo entre los dos
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-              examples:
-                activo:
-                  summary: El activo no existe
-                  value: { error: { code: ACTIVO_NO_ENCONTRADO, message: No existe un activo con id 999 } }
-                etiqueta:
-                  summary: La etiqueta no existe
-                  value: { error: { code: ETIQUETA_NO_ENCONTRADA, message: No existe una etiqueta con id 999 } }
-                vinculo:
-                  summary: El activo no tiene esa etiqueta
-                  value: { error: { code: ETIQUETA_NO_ASIGNADA, message: El activo AAPL no tiene la etiqueta dividendos } }
+          $ref: "#/components/responses/VinculoNoEncontrado"
 
   /ordenes:
     get:
@@ -458,7 +470,10 @@ paths:
                 value: { activoId: 3, sentido: compra, cantidad: 1, precioLimite: 1000, validaHasta: "2026-12-15" }
       responses:
         "201":
-          description: Orden creada, en estado viva
+          description: Orden creada, en estado viva. `Location` = `/ordenes/{id}`
+          headers:
+            Location:
+              $ref: "#/components/headers/Location"
           content:
             application/json:
               schema:
@@ -662,7 +677,10 @@ paths:
             example: { nombre: renta-fija }
       responses:
         "201":
-          description: Etiqueta creada
+          description: Etiqueta creada. `Location` = `/etiquetas/{id}`
+          headers:
+            Location:
+              $ref: "#/components/headers/Location"
           content:
             application/json:
               schema:
@@ -817,6 +835,13 @@ components:
         maximum: 100
         default: 20
 
+  headers:
+    Location:
+      description: URL relativa de lo que se creó; un GET a esa URL lo devuelve
+      schema:
+        type: string
+        example: /activos/4
+
   responses:
     ErrorValidacion:
       description: Datos de entrada inválidos (body, query o params). `details` lista cada campo con su problema.
@@ -856,6 +881,22 @@ components:
             $ref: "#/components/schemas/Error"
           example:
             error: { code: ETIQUETA_NO_ENCONTRADA, message: No existe una etiqueta con id 999 }
+    VinculoNoEncontrado:
+      description: No existe el activo, la etiqueta, o el vínculo entre los dos
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          examples:
+            activo:
+              summary: El activo no existe
+              value: { error: { code: ACTIVO_NO_ENCONTRADO, message: No existe un activo con id 999 } }
+            etiqueta:
+              summary: La etiqueta no existe
+              value: { error: { code: ETIQUETA_NO_ENCONTRADA, message: No existe una etiqueta con id 999 } }
+            vinculo:
+              summary: El activo no tiene esa etiqueta
+              value: { error: { code: ETIQUETA_NO_ASIGNADA, message: El activo AAPL no tiene la etiqueta dividendos } }
     EtiquetaDuplicada:
       description: Ya existe otra etiqueta con ese nombre
       content:

@@ -2,7 +2,8 @@
 ### Documentación interactiva: http://localhost:8000/api-docs
 ### Correrlos EN ORDEN con el servidor recién arrancado y los datos en la semilla: en memoria alcanza con reiniciar;
 ### en sequelize los datos sobreviven al reinicio, así que antes hay que parar el servidor y borrar database.sqlite.
-### Los 113 casos dan lo mismo en los dos modos (PERSISTENCE_TYPE en .env).
+### Los 121 casos dan lo mismo en los dos modos (PERSISTENCE_TYPE en .env).
+### Los POST que crean responden 201 con el header Location (la URL de lo creado): se ve en los headers de la respuesta.
 ### Los eventos (54 a 75) no cambian las respuestas: se ven en la consola del servidor y en notifications.log.
 ### Los pedidos con "# @name" guardan su respuesta: los siguientes usan el id creado ({{nombre.response.body.$.id}}).
 
@@ -736,3 +737,31 @@ DELETE {{base}}/etiquetas/{{rentaFija.response.body.$.id}}
 
 ### 113. Etiquetas al final → 200 (dividendos, tecnologia, argentina, energia)
 GET {{base}}/etiquetas
+
+### ===================== EL VÍNCULO COMO RECURSO =====================
+### El POST que asigna una etiqueta responde 201 con Location: /activos/{id}/etiquetas/{etiquetaId}, la URL del vínculo creado.
+### Un GET a esa URL responde si el activo tiene la etiqueta, con los mismos chequeos que quitarla.
+
+### 114. ¿KO tiene dividendos? Sí → 200 con la etiqueta
+GET {{base}}/activos/1/etiquetas/1
+
+### 115. ¿KO tiene tecnologia? No → 404 ETIQUETA_NO_ASIGNADA
+GET {{base}}/activos/1/etiquetas/2
+
+### 116. Etiqueta que no existe → 404 ETIQUETA_NO_ENCONTRADA
+GET {{base}}/activos/1/etiquetas/999
+
+### 117. Activo que no existe → 404 ACTIVO_NO_ENCONTRADO
+GET {{base}}/activos/999/etiquetas/1
+
+### 118. Asignar energia a GGAL → 201 · header Location: /activos/3/etiquetas/5
+POST {{base}}/activos/3/etiquetas/5
+
+### 119. Seguir el Location del caso 118 → 200 con energia
+GET {{base}}/activos/3/etiquetas/5
+
+### 120. Quitar energia de GGAL → 204
+DELETE {{base}}/activos/3/etiquetas/5
+
+### 121. El mismo GET después de quitarla → 404 ETIQUETA_NO_ASIGNADA
+GET {{base}}/activos/3/etiquetas/5
