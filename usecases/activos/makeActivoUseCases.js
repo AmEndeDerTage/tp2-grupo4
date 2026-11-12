@@ -4,6 +4,7 @@ import createActivo from "./createActivo.js";
 import updateActivo from "./updateActivo.js";
 import deleteActivo from "./deleteActivo.js";
 import getOrdenesDeActivo from "./getOrdenesDeActivo.js";
+import getEtiquetasDeActivo from "./getEtiquetasDeActivo.js";
 
 /**
  * Factory de casos de uso de Activos.
@@ -24,6 +25,7 @@ function makeActivoUseCases({ activosDao, ordenesDao, events, transaccion }) {
     updateActivo: (id, cambios) => updateActivo(id, cambios, activosDao, ordenesDao, events, transaccion),
     deleteActivo: (id) => deleteActivo(id, activosDao, ordenesDao, transaccion),
     getOrdenesDeActivo: (id, filtros) => getOrdenesDeActivo(id, filtros, activosDao, ordenesDao),
+    getEtiquetasDeActivo: (id) => getEtiquetasDeActivo(id, activosDao),
   };
 }
 

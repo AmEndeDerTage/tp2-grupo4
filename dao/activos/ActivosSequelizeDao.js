@@ -1,10 +1,16 @@
 import { UniqueConstraintError } from "sequelize";
-import { sequelize, ActivoModel } from "../models/index.js";
+import { sequelize, ActivoModel, EtiquetaModel } from "../models/index.js";
 import { SEMILLA_ACTIVOS } from "../semilla.js";
 import AppError from "../../errors/AppError.js";
 
 // Columnas pedidas explícitamente (evita un SELECT *), en el mismo orden en que las devuelve el DAO en memoria
 const ATRIBUTOS = ["id", "ticker", "nombre", "mercado", "ratio", "nivel", "cantidad", "topeCedears"];
+
+// Trae las etiquetas de cada activo en la misma consulta (JOIN con la tabla intermedia): el equivalente de #conEtiquetas
+// en memoria. through: { attributes: [] } evita que cada etiqueta traiga además su fila de activo_etiquetas.
+const INCLUDE = [{ model: EtiquetaModel, as: "etiquetas", attributes: ["id", "nombre"], through: { attributes: [] } }];
+// Las etiquetas anidadas, ordenadas por id como en memoria
+const ORDEN_ETIQUETAS = [{ model: EtiquetaModel, as: "etiquetas" }, "id", "ASC"];
 
 /**
  * Adaptador DAO de Activos con Sequelize (SQLite).
@@ -42,12 +48,16 @@ class ActivosSequelizeDao {
     if (nivel !== undefined) where.nivel = nivel;
     if (mercado !== undefined) where.mercado = mercado;
 
-    const order = [["id", "ASC"]]; // Desempate estable por id, igual que en memoria
+    const order = [["id", "ASC"], ORDEN_ETIQUETAS]; // Desempate estable por id, igual que en memoria
     if (sort) order.unshift([sort.replace(/^-/, ""), sort.startsWith("-") ? "DESC" : "ASC"]);
 
+    // distinct: true — con el JOIN, un activo con dos etiquetas ocupa dos filas, y sin esto `count` cuenta filas y no
+    // activos (probado: total 4 con 3 activos). La paginación igual se aplica a los activos: Sequelize arma una subconsulta.
     const { rows, count } = await ActivoModel.findAndCountAll({
       where,
       attributes: ATRIBUTOS,
+      include: INCLUDE,
+      distinct: true,
       order,
       ...(limit && { limit, offset: (page - 1) * limit }),
     });
@@ -56,17 +66,18 @@ class ActivosSequelizeDao {
   }
 
   async getById(id, tx) {
-    const activo = await ActivoModel.findByPk(id, { attributes: ATRIBUTOS, transaction: tx });
+    const activo = await ActivoModel.findByPk(id, { attributes: ATRIBUTOS, include: INCLUDE, order: [ORDEN_ETIQUETAS], transaction: tx });
     return activo ? activo.get({ plain: true }) : null;
   }
 
-  // Búsqueda exacta por ticker: la usa el caso de uso para la regla de ticker único
+  // Búsqueda exacta por ticker: la usa el caso de uso para la regla de ticker único (sin etiquetas: solo hace falta el id)
   async getByTicker(ticker, tx) {
     const activo = await ActivoModel.findOne({ where: { ticker }, attributes: ATRIBUTOS, transaction: tx });
     return activo ? activo.get({ plain: true }) : null;
   }
 
-  // La base asigna el id autoincremental; se ignora cualquier `id` que venga en los datos
+  // La base asigna el id autoincremental; se ignora cualquier `id` que venga en los datos.
+  // Después de crear relee con getById para devolverlo con sus etiquetas (todavía ninguna), como en memoria.
   async save(data) {
     const { id: _ignorado, ...datos } = data;
     try {
@@ -78,14 +89,15 @@ class ActivosSequelizeDao {
   }
 
   // Pisa solo los campos que vienen en `cambios`; el id nunca se modifica. Devuelve null si no existe.
+  // Después de guardar relee con getById (dentro de la misma transacción) para devolverlo con sus etiquetas, como en memoria.
   async update(id, cambios, tx) {
     const activo = await ActivoModel.findByPk(id, { attributes: ATRIBUTOS, transaction: tx });
     if (!activo) return null;
 
-    const { id: _ignorado, ...cambiosPermitidos } = cambios;
+    const { id: _ignorado, etiquetas: _etiquetas, ...cambiosPermitidos } = cambios;
     try {
       await activo.update(cambiosPermitidos, { transaction: tx });
-      return activo.get({ plain: true });
+      return this.getById(id, tx);
     } catch (error) {
       this.#traducirTickerDuplicado(error, cambiosPermitidos.ticker);
     }

@@ -53,6 +53,13 @@ class ActivosController {
     if (!resultado) throw new AppError("ACTIVO_NO_ENCONTRADO", `No existe un activo con id ${req.params.id}`, 404);
     res.json(resultado);
   };
+
+  // GET /activos/:id/etiquetas (la relación N:N recorrida desde el activo)
+  listEtiquetas = async (req, res) => {
+    const etiquetas = await this.#useCases.getEtiquetasDeActivo(req.params.id);
+    if (!etiquetas) throw new AppError("ACTIVO_NO_ENCONTRADO", `No existe un activo con id ${req.params.id}`, 404);
+    res.json(etiquetas);
+  };
 }
 
 // Se exporta la clase, no una instancia: quien la instancia (con los casos de uso inyectados) es el container

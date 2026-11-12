@@ -12,6 +12,8 @@ import etiquetasMemoryDao from "../etiquetas/EtiquetasMemoryDao.js";
  * Relación N:N con Etiquetas: los vínculos (el equivalente de la tabla intermedia activo_etiquetas) viven acá, en un
  * array de pares { activoId, etiquetaId }, porque el vínculo se maneja como «las etiquetas del activo». Para devolver
  * el nombre de cada etiqueta colabora con el DAO de Etiquetas en memoria, inyectado por constructor (como Órdenes con Activos).
+ * Todo activo que sale de este DAO trae sus etiquetas anidadas (`etiquetas: [{ id, nombre }]`), igual que el include de
+ * Sequelize; salvo getByTicker y ajustarCantidad, que son de uso interno de los casos de uso y del DAO de Órdenes.
  */
 
 class ActivosMemoryDao {
@@ -26,6 +28,11 @@ class ActivosMemoryDao {
     this.#nextId = this.#activos.reduce((max, a) => (a.id > max ? a.id : max), 0) + 1;
     this.#vinculos = vinculosIniciales.map((v) => ({ ...v }));
     this.#etiquetasDao = etiquetasDao;
+  }
+
+  // Adjunta las etiquetas del activo, con las mismas columnas que trae el include de Sequelize (como #withRelations en Órdenes)
+  async #conEtiquetas(activo) {
+    return { ...activo, etiquetas: await this.getEtiquetas(activo.id) };
   }
 
   /**
@@ -55,15 +62,16 @@ class ActivosMemoryDao {
 
     if (limit) resultado = resultado.slice((page - 1) * limit, page * limit);
 
-    return { items: resultado.map((a) => ({ ...a })), total };
+    const items = await Promise.all(resultado.map((a) => this.#conEtiquetas(a)));
+    return { items, total };
   }
 
   async getById(id, _tx) {
     const activo = this.#activos.find((a) => a.id === Number(id));
-    return activo ? { ...activo } : null;
+    return activo ? this.#conEtiquetas(activo) : null;
   }
 
-  // Búsqueda exacta por ticker: la usa el caso de uso para la regla de ticker único
+  // Búsqueda exacta por ticker: la usa el caso de uso para la regla de ticker único (sin etiquetas: solo hace falta el id)
   async getByTicker(ticker, _tx) {
     const activo = this.#activos.find((a) => a.ticker === ticker);
     return activo ? { ...activo } : null;
@@ -74,7 +82,7 @@ class ActivosMemoryDao {
     const { id: _ignorado, ...datos } = data;
     const nuevo = { id: this.#nextId++, ...datos };
     this.#activos.push(nuevo);
-    return { ...nuevo };
+    return this.#conEtiquetas(nuevo);
   }
 
   // Pisa solo los campos que vienen en `cambios`; el id nunca se modifica. Devuelve null si no existe.
@@ -83,8 +91,9 @@ class ActivosMemoryDao {
     if (indice === -1) return null;
 
     const { id: _ignorado, ...cambiosPermitidos } = cambios;
-    this.#activos[indice] = { ...this.#activos[indice], ...cambiosPermitidos };
-    return { ...this.#activos[indice] };
+    const { etiquetas: _etiquetas, ...sinEtiquetas } = cambiosPermitidos; // las etiquetas se cambian por sus endpoints
+    this.#activos[indice] = { ...this.#activos[indice], ...sinEtiquetas };
+    return this.#conEtiquetas(this.#activos[indice]);
   }
 
   /**

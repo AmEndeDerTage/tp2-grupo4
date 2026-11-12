@@ -24,6 +24,8 @@ function createActivosRouter(controller) {
   router.delete("/:id", validateParams(activoIdParamSchema), controller.remove);
   // Relación Activo 1:N Orden: las órdenes de un activo (filtros de Órdenes, sin activoId porque va en la ruta)
   router.get("/:id/ordenes", validateParams(activoIdParamSchema), validateQuery(queryOrdenesDeActivoSchema), controller.listOrdenes);
+  // Relación Activo N:N Etiqueta: las etiquetas de un activo
+  router.get("/:id/etiquetas", validateParams(activoIdParamSchema), controller.listEtiquetas);
 
   return router;
 }
