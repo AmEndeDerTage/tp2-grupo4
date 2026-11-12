@@ -90,7 +90,7 @@ function verificarCupo(activo, sentido, cantidad, vivasDelMismoLado) {
  * Regla del aviso activo.topeCerca (no rechaza nada: decide si hay que avisar).
  * Para una compra que ya pasó la regla 6: si lo comprometido (cartera + compras vivas, incluida esta)
  * llega al `umbralPct` % del tope, devuelve el payload del evento; si no, `null`.
- * El umbral llega por parámetro (el caso de uso lo lee de config) para que la función sea pura y testeable.
+ * El umbral llega por parámetro (a los casos de uso se lo inyecta el container) para que la función sea pura y testeable.
  */
 function evaluarTopeCerca(activo, vivasDelMismoLado, cantidad, umbralPct) {
   const enComprasVivas = vivasDelMismoLado.reduce((suma, o) => suma + o.cantidad, 0) + cantidad;

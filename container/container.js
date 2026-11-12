@@ -60,7 +60,7 @@ async function buildContainer() {
   // Los números de las reglas también se inyectan desde acá (clase 13): el umbral del aviso de tope llega a los casos de uso
   // como topeCercaPct, así que ninguno importa config.js y un test puede usar otro valor.
   const transaccion = getTransaccion();
-  const activoUseCases = makeActivoUseCases({ activosDao, ordenesDao, etiquetasDao, events, transaccion });
+  const activoUseCases = makeActivoUseCases({ activosDao, ordenesDao, etiquetasDao, events, transaccion, topeCercaPct: TOPE_CERCA_PCT });
   const ordenUseCases = makeOrdenUseCases({ ordenesDao, activosDao, events, transaccion, topeCercaPct: TOPE_CERCA_PCT });
   const etiquetaUseCases = makeEtiquetaUseCases({ etiquetasDao, activosDao, transaccion });
 

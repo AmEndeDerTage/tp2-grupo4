@@ -19,14 +19,16 @@ import quitarEtiqueta from "./quitarEtiqueta.js";
  *    se quitan o con las que nace un activo
  *  - events: el bus de eventos, para que updateActivo avise activo.topeCerca (clase 10)
  *  - transaccion: cómo correr leer-verificar-escribir como una sola operación (dao/transacciones.js)
+ *  - topeCercaPct: el umbral del aviso activo.topeCerca (TOPE_CERCA_PCT) para updateActivo, inyectado como en
+ *    makeOrdenUseCases (clase 13): ningún caso de uso importa config.js
  * y devuelve los casos de uso con ellas ya inyectadas, para que el controlador los llame sin conocer ningún DAO.
  */
-function makeActivoUseCases({ activosDao, ordenesDao, etiquetasDao, events, transaccion }) {
+function makeActivoUseCases({ activosDao, ordenesDao, etiquetasDao, events, transaccion, topeCercaPct }) {
   return {
     getActivos: (filtros) => getActivos(filtros, activosDao),
     getActivoById: (id) => getActivoById(id, activosDao),
     createActivo: (data) => createActivo(data, activosDao, etiquetasDao, transaccion),
-    updateActivo: (id, cambios) => updateActivo(id, cambios, activosDao, ordenesDao, events, transaccion),
+    updateActivo: (id, cambios) => updateActivo(id, cambios, activosDao, ordenesDao, events, transaccion, topeCercaPct),
     deleteActivo: (id) => deleteActivo(id, activosDao, ordenesDao, transaccion),
     getOrdenesDeActivo: (id, filtros) => getOrdenesDeActivo(id, filtros, activosDao, ordenesDao),
     getEtiquetasDeActivo: (id) => getEtiquetasDeActivo(id, activosDao),

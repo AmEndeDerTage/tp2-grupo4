@@ -1,5 +1,4 @@
 import AppError from "../../errors/AppError.js";
-import { TOPE_CERCA_PCT } from "../../config/config.js";
 import EVENTS from "../../events/eventNames.js";
 import { verificarCompromisos, evaluarTopeCerca } from "../ordenes/reglasOrden.js";
 
@@ -14,11 +13,12 @@ import { verificarCompromisos, evaluarTopeCerca } from "../ordenes/reglasOrden.j
  * medio podría quedar fuera de la cuenta.
  *
  * Evento: si el cambio toca `cantidad` o `topeCedears` y lo comprometido (cartera + compras vivas) queda en
- * TOPE_CERCA_PCT % o más del tope, emite activo.topeCerca, el mismo aviso que una compra (D6). Se llega al tope por
+ * `topeCercaPct` % o más del tope, emite activo.topeCerca, el mismo aviso que una compra (D6). Se llega al tope por
  * cualquiera de las dos puertas, y el aviso dice «el activo está cerca del tope», no «una compra lo acercó».
  * Cambiar solo el nivel, el nombre o el ticker no vuelve a avisar. Se emite después del commit.
+ * El umbral `topeCercaPct` llega inyectado desde el container (clase 13), como en createOrden y updateOrden.
  */
-async function updateActivo(id, cambios, activosDao, ordenesDao, events, transaccion) {
+async function updateActivo(id, cambios, activosDao, ordenesDao, events, transaccion, topeCercaPct) {
   const tocaCupo = cambios.cantidad !== undefined || cambios.topeCedears !== undefined;
 
   const resultado = await transaccion(async (tx) => {
@@ -46,7 +46,7 @@ async function updateActivo(id, cambios, activosDao, ordenesDao, events, transac
 
   const { actualizado, comprasVivas } = resultado;
   if (tocaCupo) {
-    const topeCerca = evaluarTopeCerca(actualizado, comprasVivas, 0, TOPE_CERCA_PCT);
+    const topeCerca = evaluarTopeCerca(actualizado, comprasVivas, 0, topeCercaPct);
     if (topeCerca) events.emit(EVENTS.ACTIVO_TOPE_CERCA, topeCerca);
   }
 
