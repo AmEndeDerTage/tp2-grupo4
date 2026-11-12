@@ -1,5 +1,4 @@
 import AppError from "../../errors/AppError.js";
-import { TOPE_CERCA_PCT } from "../../config/config.js";
 import EVENTS from "../../events/eventNames.js";
 import {
   obtenerActivoDeLaOrden,
@@ -19,14 +18,15 @@ import {
  *   5/6. si cambia la cantidad, entra en lo disponible             → CANTIDAD_INSUFICIENTE / TOPE_EXCEDIDO (409)
  * En 3, 5 y 6 la propia orden no se cuenta (excluirId): si no, se compararía consigo misma.
  *
- * Evento: si el cambio incluye la cantidad de una compra y lo comprometido queda en TOPE_CERCA_PCT % o más
+ * Evento: si el cambio incluye la cantidad de una compra y lo comprometido queda en `topeCercaPct` % o más
  * del tope, emite activo.topeCerca (mismo criterio que updateBook del profesor: editar solo el precio,
  * la fecha o el motivo no vuelve a avisar). orden.creada no se emite: la orden ya existía.
  *
  * Como en createOrden, leer, verificar y guardar van en una transacción y el evento sale después del commit.
  * La regla 7 también queda protegida: una ejecución simultánea no puede colarse entre la lectura y la escritura.
+ * El umbral `topeCercaPct` llega inyectado desde el container (clase 13), como en createOrden.
  */
-async function updateOrden(id, cambios, ordenesDao, activosDao, events, transaccion) {
+async function updateOrden(id, cambios, ordenesDao, activosDao, events, transaccion, topeCercaPct) {
   const resultado = await transaccion(async (tx) => {
     const orden = await ordenesDao.getById(id, tx);
     if (!orden) return null;
@@ -52,7 +52,7 @@ async function updateOrden(id, cambios, ordenesDao, activosDao, events, transacc
   const { orden, activo, vivas, actualizada } = resultado;
 
   if (actualizada && cambios.cantidad !== undefined && orden.sentido === "compra") {
-    const topeCerca = evaluarTopeCerca(activo, vivas, actualizada.cantidad, TOPE_CERCA_PCT);
+    const topeCerca = evaluarTopeCerca(activo, vivas, actualizada.cantidad, topeCercaPct);
     if (topeCerca) events.emit(EVENTS.ACTIVO_TOPE_CERCA, topeCerca);
   }
 

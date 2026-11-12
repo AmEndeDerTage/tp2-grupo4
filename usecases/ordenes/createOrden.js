@@ -1,4 +1,3 @@
-import { TOPE_CERCA_PCT } from "../../config/config.js";
 import EVENTS from "../../events/eventNames.js";
 import {
   obtenerActivoDeLaOrden,
@@ -20,17 +19,19 @@ import {
  *
  * Después de guardar, anuncia lo que pasó por el bus `events` (efectos secundarios desacoplados):
  *  - orden.creada, siempre: alguien tiene que colocarla a mano en el broker
- *  - activo.topeCerca, si es una compra que deja lo comprometido en TOPE_CERCA_PCT % o más del tope
+ *  - activo.topeCerca, si es una compra que deja lo comprometido en `topeCercaPct` % o más del tope
  * No sabe quién escucha ni por dónde se avisa. Se emite DESPUÉS de guardar: no se anuncia algo que todavía puede fallar.
  * Los payloads son objetos planos armados acá, con el ticker ya resuelto (el activo se cargó para la regla 1):
  * el listener no necesita ningún DAO.
- * Leer el umbral de config acá está bien (es parte de la regla: cuándo avisar); instanciar un notificador, no (es el canal).
+ * El umbral (`topeCercaPct`) es parte de la regla —cuándo avisar— pero el número llega inyectado desde el container,
+ * como lowStockThreshold en makeLoanUseCases del profesor (clase 13): el caso de uso no importa config.js, así que un
+ * test puede probarlo con otro umbral sin tocar el .env. Instanciar un notificador tampoco le toca: es el canal.
  *
  * Leer, verificar y guardar van dentro de UNA transacción (`transaccion`, inyectada): si no, dos pedidos simultáneos
  * leen lo mismo, pasan los dos las reglas 3, 5 y 6 y se guardan los dos (la carrera A1). Los eventos se emiten
  * DESPUÉS de que la transacción confirmó: adentro, un rollback posterior dejaría anunciado algo que no pasó.
  */
-async function createOrden(data, ordenesDao, activosDao, events, transaccion) {
+async function createOrden(data, ordenesDao, activosDao, events, transaccion, topeCercaPct) {
   const { activo, vivas, creada } = await transaccion(async (tx) => {
     const activo = await obtenerActivoDeLaOrden(data.activoId, activosDao, tx);
     verificarNivelOperable(activo, data.sentido);
@@ -53,7 +54,7 @@ async function createOrden(data, ordenesDao, activosDao, events, transaccion) {
   });
 
   if (creada.sentido === "compra") {
-    const topeCerca = evaluarTopeCerca(activo, vivas, creada.cantidad, TOPE_CERCA_PCT);
+    const topeCerca = evaluarTopeCerca(activo, vivas, creada.cantidad, topeCercaPct);
     if (topeCerca) events.emit(EVENTS.ACTIVO_TOPE_CERCA, topeCerca);
   }
 

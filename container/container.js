@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { TOPE_CERCA_PCT } from "../config/config.js";
 import { getActivosDao, getOrdenesDao, getEtiquetasDao, getTransaccion } from "../dao/daoFactory.js";
 import makeActivoUseCases from "../usecases/activos/makeActivoUseCases.js";
 import ActivosController from "../controllers/ActivosController.js";
@@ -56,9 +57,11 @@ async function buildContainer() {
   // Cada entidad recibe también el DAO de la otra: Activos lo usa para la regla 8 y Órdenes para las reglas sobre el activo.
   // Activos recibe además el de Etiquetas, para asignar y quitar etiquetas (la N:N).
   // Las dos reciben la misma forma de transacción, elegida por la factory igual que los DAOs.
+  // Los números de las reglas también se inyectan desde acá (clase 13): el umbral del aviso de tope llega a los casos de uso
+  // como topeCercaPct, así que ninguno importa config.js y un test puede usar otro valor.
   const transaccion = getTransaccion();
   const activoUseCases = makeActivoUseCases({ activosDao, ordenesDao, etiquetasDao, events, transaccion });
-  const ordenUseCases = makeOrdenUseCases({ ordenesDao, activosDao, events, transaccion });
+  const ordenUseCases = makeOrdenUseCases({ ordenesDao, activosDao, events, transaccion, topeCercaPct: TOPE_CERCA_PCT });
   const etiquetaUseCases = makeEtiquetaUseCases({ etiquetasDao, activosDao, transaccion });
 
   // 4. Controladores con los casos de uso inyectados
