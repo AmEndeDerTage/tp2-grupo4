@@ -1,11 +1,14 @@
 import { Router } from "express";
-import { getActivosDao, getOrdenesDao, getTransaccion } from "../dao/daoFactory.js";
+import { getActivosDao, getOrdenesDao, getEtiquetasDao, getTransaccion } from "../dao/daoFactory.js";
 import makeActivoUseCases from "../usecases/activos/makeActivoUseCases.js";
 import ActivosController from "../controllers/ActivosController.js";
 import createActivosRouter from "../routes/activosRoutes.js";
 import makeOrdenUseCases from "../usecases/ordenes/makeOrdenUseCases.js";
 import OrdenesController from "../controllers/OrdenesController.js";
 import createOrdenesRouter from "../routes/ordenesRoutes.js";
+import makeEtiquetaUseCases from "../usecases/etiquetas/makeEtiquetaUseCases.js";
+import EtiquetasController from "../controllers/EtiquetasController.js";
+import createEtiquetasRouter from "../routes/etiquetasRoutes.js";
 import createDocsRouter from "../docs/swaggerRouter.js";
 import createEventBus from "../events/eventBus.js";
 import EVENTS from "../events/eventNames.js";
@@ -31,6 +34,11 @@ async function buildContainer() {
   if (typeof ordenesDao.init === "function") {
     await ordenesDao.init();
   }
+  // Etiquetas: el otro lado de la relación N:N Activo–Etiqueta
+  const etiquetasDao = getEtiquetasDao();
+  if (typeof etiquetasDao.init === "function") {
+    await etiquetasDao.init();
+  }
 
   // 2. Eventos: un solo bus para toda la app. Los listeners de alerts/ se registran acá con sus notificadores:
   //    orden.creada y orden.ejecutada salen por el de NOTIFIER_TYPE; activo.topeCerca, por un notificador adicional (extra de la consigna)
@@ -50,15 +58,18 @@ async function buildContainer() {
   const transaccion = getTransaccion();
   const activoUseCases = makeActivoUseCases({ activosDao, ordenesDao, events, transaccion });
   const ordenUseCases = makeOrdenUseCases({ ordenesDao, activosDao, events, transaccion });
+  const etiquetaUseCases = makeEtiquetaUseCases({ etiquetasDao });
 
   // 4. Controladores con los casos de uso inyectados
   const activosController = new ActivosController(activoUseCases);
   const ordenesController = new OrdenesController(ordenUseCases);
+  const etiquetasController = new EtiquetasController(etiquetaUseCases);
 
   // 5. Routers con los controladores inyectados, montados en el router principal
   const router = Router();
   router.use("/activos", createActivosRouter(activosController));
   router.use("/ordenes", createOrdenesRouter(ordenesController));
+  router.use("/etiquetas", createEtiquetasRouter(etiquetasController));
 
   // Documentación interactiva (OpenAPI + Swagger UI): un recurso HTTP más de la API
   router.use("/api-docs", createDocsRouter());
