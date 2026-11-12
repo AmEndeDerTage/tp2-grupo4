@@ -59,7 +59,7 @@ async function buildContainer() {
   const transaccion = getTransaccion();
   const activoUseCases = makeActivoUseCases({ activosDao, ordenesDao, etiquetasDao, events, transaccion });
   const ordenUseCases = makeOrdenUseCases({ ordenesDao, activosDao, events, transaccion });
-  const etiquetaUseCases = makeEtiquetaUseCases({ etiquetasDao });
+  const etiquetaUseCases = makeEtiquetaUseCases({ etiquetasDao, activosDao, transaccion });
 
   // 4. Controladores con los casos de uso inyectados
   const activosController = new ActivosController(activoUseCases);

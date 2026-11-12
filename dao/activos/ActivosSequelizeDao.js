@@ -141,6 +141,12 @@ class ActivosSequelizeDao {
     return borrados > 0;
   }
 
+  // Saca una etiqueta de todos los activos que la tienen (antes de borrarla). Devuelve cuántos vínculos borró.
+  // El ON DELETE CASCADE de la base lo haría solo al borrar la etiqueta; se hace explícito para que memoria haga lo mismo.
+  async quitarEtiquetaDeTodos(etiquetaId, tx) {
+    return ActivoEtiquetaModel.destroy({ where: { etiquetaId }, transaction: tx });
+  }
+
   // Devuelve true si borró, false si no existía. Sus vínculos con etiquetas los borra la base (ON DELETE CASCADE)
   async delete(id, tx) {
     const borrados = await ActivoModel.destroy({ where: { id }, transaction: tx });

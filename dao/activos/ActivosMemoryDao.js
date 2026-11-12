@@ -154,6 +154,13 @@ class ActivosMemoryDao {
     return true;
   }
 
+  // Saca una etiqueta de todos los activos que la tienen (antes de borrarla). Devuelve cuántos vínculos borró.
+  async quitarEtiquetaDeTodos(etiquetaId, _tx) {
+    const antes = this.#vinculos.length;
+    this.#vinculos = this.#vinculos.filter((v) => v.etiquetaId !== Number(etiquetaId));
+    return antes - this.#vinculos.length;
+  }
+
   // Devuelve true si borró, false si no existía.
   // Se lleva sus vínculos con etiquetas, como el ON DELETE CASCADE de activo_etiquetas en la base: un vínculo colgado
   // de un activo que ya no existe haría que los dos modos respondan distinto.
