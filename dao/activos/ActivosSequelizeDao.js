@@ -1,6 +1,7 @@
 import { UniqueConstraintError, Op } from "sequelize";
 import { sequelize, ActivoModel, EtiquetaModel, ActivoEtiquetaModel } from "../models/index.js";
 import { SEMILLA_ACTIVOS } from "../semilla.js";
+import { transaccionSequelize } from "../transacciones.js";
 import AppError from "../../errors/AppError.js";
 
 // Columnas pedidas explícitamente (evita un SELECT *), en el mismo orden en que las devuelve el DAO en memoria
@@ -87,16 +88,29 @@ class ActivosSequelizeDao {
     return activo ? activo.get({ plain: true }) : null;
   }
 
-  // La base asigna el id autoincremental; se ignora cualquier `id` que venga en los datos.
-  // Después de crear relee con getById para devolverlo con sus etiquetas (todavía ninguna), como en memoria.
-  async save(data) {
-    const { id: _ignorado, ...datos } = data;
-    try {
-      const nuevo = await ActivoModel.create(datos);
-      return this.getById(nuevo.id);
-    } catch (error) {
-      this.#traducirTickerDuplicado(error, datos.ticker);
-    }
+  /**
+   * La base asigna el id autoincremental; se ignora cualquier `id` que venga en los datos.
+   * Con `etiquetaIds`, crea además los vínculos en activo_etiquetas: dos INSERT que tienen que ir juntos. Usa la transacción
+   * del caso de uso (`tx`); si no recibe ninguna, abre la suya (como ejecutar() en Órdenes). Si el segundo INSERT falla
+   * (p. ej. la clave foránea de una etiqueta que no existe), la transacción hace rollback y el activo no queda.
+   * Después relee con getById, dentro de la transacción, para devolverlo con sus etiquetas, como en memoria.
+   */
+  async save(data, tx) {
+    const trabajo = async (t) => {
+      const { id: _ignorado, etiquetaIds = [], ...datos } = data;
+      let nuevo;
+      try {
+        nuevo = await ActivoModel.create(datos, { transaction: t });
+      } catch (error) {
+        this.#traducirTickerDuplicado(error, datos.ticker);
+      }
+      // Fuera del try: un vínculo repetido también es un UniqueConstraintError, y no es un ticker duplicado
+      if (etiquetaIds.length > 0) {
+        await ActivoEtiquetaModel.bulkCreate(etiquetaIds.map((etiquetaId) => ({ activoId: nuevo.id, etiquetaId })), { transaction: t });
+      }
+      return this.getById(nuevo.id, t);
+    };
+    return tx ? trabajo(tx) : transaccionSequelize(trabajo);
   }
 
   // Pisa solo los campos que vienen en `cambios`; el id nunca se modifica. Devuelve null si no existe.

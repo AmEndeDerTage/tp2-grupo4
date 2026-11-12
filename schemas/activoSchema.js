@@ -34,7 +34,10 @@ const campos = {
     .positive("El tope de CEDEARs debe ser mayor a 0"),
 };
 
-// POST /activos: todo obligatorio salvo cantidad (un activo puede darse de alta sin posición)
+// POST /activos: todo obligatorio salvo cantidad (un activo puede darse de alta sin posición) y etiquetaIds.
+// etiquetaIds: las etiquetas con las que nace el activo (la operación atómica de la N:N: activo + vínculos, todo o nada).
+// Que no se repitan es una validación cruzada entre elementos del mismo pedido (refine, como en la clase 13): se decide
+// mirando solo el pedido, así que es de forma (400). Que existan, en cambio, necesita consultar datos: caso de uso (404).
 const createActivoSchema = z.object({
   ticker: campos.ticker,
   nombre: campos.nombre,
@@ -43,6 +46,14 @@ const createActivoSchema = z.object({
   nivel: campos.nivel,
   cantidad: campos.cantidad.default(0),
   topeCedears: campos.topeCedears,
+  etiquetaIds: z
+    .array(
+      z.number({ error: "Cada etiqueta debe ser un id numérico" }).int("Cada etiqueta debe ser un id entero").positive("Cada etiqueta debe ser un id positivo"),
+      { error: "etiquetaIds debe ser una lista de ids de etiquetas" }
+    )
+    .max(10, "Un activo puede nacer con hasta 10 etiquetas")
+    .refine((ids) => new Set(ids).size === ids.length, { error: "Las etiquetas no pueden repetirse" })
+    .optional(),
 });
 
 // PUT /activos/:id (actualización parcial): todo opcional y SIN defaults,

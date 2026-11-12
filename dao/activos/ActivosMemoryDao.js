@@ -88,11 +88,24 @@ class ActivosMemoryDao {
     return activo ? { ...activo } : null;
   }
 
-  // Asigna el id autoincremental e ignora cualquier `id` que venga en los datos
-  async save(data) {
-    const { id: _ignorado, ...datos } = data;
+  /**
+   * Asigna el id autoincremental e ignora cualquier `id` que venga en los datos.
+   * Con `etiquetaIds`, crea además los vínculos: activo y vínculos se escriben juntos, sin ningún await entre una escritura
+   * y otra, así que nadie ve el activo a medio crear. Lo que la memoria no tiene es rollback: por eso todo lo que podría
+   * fallar se verifica ANTES de escribir. Que existan las etiquetas lo verifica el caso de uso; acá queda como segunda
+   * barrera, igual que la clave foránea de la base (si la regla se salteara, en los dos modos el activo no se crea y es 500).
+   */
+  async save(data, _tx) {
+    const { id: _ignorado, etiquetaIds = [], ...datos } = data;
+    for (const etiquetaId of etiquetaIds) {
+      if (!(await this.#etiquetasDao.getById(etiquetaId))) {
+        throw new Error(`Vínculo inválido: no existe la etiqueta ${etiquetaId} (clave foránea)`);
+      }
+    }
+
     const nuevo = { id: this.#nextId++, ...datos };
     this.#activos.push(nuevo);
+    for (const etiquetaId of etiquetaIds) this.#vinculos.push({ activoId: nuevo.id, etiquetaId });
     return this.#conEtiquetas(nuevo);
   }
 

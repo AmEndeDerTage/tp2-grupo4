@@ -15,7 +15,8 @@ import quitarEtiqueta from "./quitarEtiqueta.js";
  *  - ordenesDao: el de la entidad relacionada, para la regla 8 (no borrar un activo con órdenes),
  *    para recorrer la relación (GET /activos/:id/ordenes) y para que updateActivo verifique lo comprometido
  *    en órdenes vivas (reglas 5 y 6 vistas desde el activo)
- *  - etiquetasDao: el del otro lado de la N:N Activo–Etiqueta, para verificar que exista la etiqueta que se asigna o se quita
+ *  - etiquetasDao: el del otro lado de la N:N Activo–Etiqueta, para verificar que existan las etiquetas que se asignan,
+ *    se quitan o con las que nace un activo
  *  - events: el bus de eventos, para que updateActivo avise activo.topeCerca (clase 10)
  *  - transaccion: cómo correr leer-verificar-escribir como una sola operación (dao/transacciones.js)
  * y devuelve los casos de uso con ellas ya inyectadas, para que el controlador los llame sin conocer ningún DAO.
@@ -24,7 +25,7 @@ function makeActivoUseCases({ activosDao, ordenesDao, etiquetasDao, events, tran
   return {
     getActivos: (filtros) => getActivos(filtros, activosDao),
     getActivoById: (id) => getActivoById(id, activosDao),
-    createActivo: (data) => createActivo(data, activosDao),
+    createActivo: (data) => createActivo(data, activosDao, etiquetasDao, transaccion),
     updateActivo: (id, cambios) => updateActivo(id, cambios, activosDao, ordenesDao, events, transaccion),
     deleteActivo: (id) => deleteActivo(id, activosDao, ordenesDao, transaccion),
     getOrdenesDeActivo: (id, filtros) => getOrdenesDeActivo(id, filtros, activosDao, ordenesDao),
