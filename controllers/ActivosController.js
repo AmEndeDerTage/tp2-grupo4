@@ -61,6 +61,13 @@ class ActivosController {
     res.json(etiquetas);
   };
 
+  // GET /activos/:id/etiquetas/:etiquetaId → 200 con la etiqueta si el activo la tiene (un vínculo; es la URL del Location al asignar)
+  getEtiqueta = async (req, res) => {
+    const etiqueta = await this.#useCases.getEtiquetaDeActivo(req.params.id, req.params.etiquetaId);
+    if (!etiqueta) throw new AppError("ACTIVO_NO_ENCONTRADO", `No existe un activo con id ${req.params.id}`, 404);
+    res.json(etiqueta);
+  };
+
   // POST /activos/:id/etiquetas/:etiquetaId → 201 con las etiquetas del activo (se creó un vínculo).
   // Location apunta al vínculo creado, que es la propia URL del pedido (con los ids ya validados por Zod)
   asignarEtiqueta = async (req, res) => {

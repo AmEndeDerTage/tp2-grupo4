@@ -5,6 +5,7 @@ import updateActivo from "./updateActivo.js";
 import deleteActivo from "./deleteActivo.js";
 import getOrdenesDeActivo from "./getOrdenesDeActivo.js";
 import getEtiquetasDeActivo from "./getEtiquetasDeActivo.js";
+import getEtiquetaDeActivo from "./getEtiquetaDeActivo.js";
 import asignarEtiqueta from "./asignarEtiqueta.js";
 import quitarEtiqueta from "./quitarEtiqueta.js";
 
@@ -32,6 +33,7 @@ function makeActivoUseCases({ activosDao, ordenesDao, etiquetasDao, events, tran
     deleteActivo: (id) => deleteActivo(id, activosDao, ordenesDao, transaccion),
     getOrdenesDeActivo: (id, filtros) => getOrdenesDeActivo(id, filtros, activosDao, ordenesDao),
     getEtiquetasDeActivo: (id) => getEtiquetasDeActivo(id, activosDao),
+    getEtiquetaDeActivo: (id, etiquetaId) => getEtiquetaDeActivo(id, etiquetaId, activosDao, etiquetasDao),
     asignarEtiqueta: (id, etiquetaId) => asignarEtiqueta(id, etiquetaId, activosDao, etiquetasDao, transaccion),
     quitarEtiqueta: (id, etiquetaId) => quitarEtiqueta(id, etiquetaId, activosDao, etiquetasDao, transaccion),
   };
