@@ -27,10 +27,10 @@ class ActivosController {
     res.json(activo);
   };
 
-  // POST /activos → 201
+  // POST /activos → 201 con el header Location: la URL del activo creado (clase 13), donde un GET lo devuelve
   create = async (req, res) => {
     const activo = await this.#useCases.createActivo(req.body);
-    res.status(201).json(activo);
+    res.status(201).location(`/activos/${activo.id}`).json(activo);
   };
 
   // PUT /activos/:id (parcial)
@@ -61,11 +61,12 @@ class ActivosController {
     res.json(etiquetas);
   };
 
-  // POST /activos/:id/etiquetas/:etiquetaId → 201 con las etiquetas del activo (se creó un vínculo)
+  // POST /activos/:id/etiquetas/:etiquetaId → 201 con las etiquetas del activo (se creó un vínculo).
+  // Location apunta al vínculo creado, que es la propia URL del pedido (con los ids ya validados por Zod)
   asignarEtiqueta = async (req, res) => {
     const etiquetas = await this.#useCases.asignarEtiqueta(req.params.id, req.params.etiquetaId);
     if (!etiquetas) throw new AppError("ACTIVO_NO_ENCONTRADO", `No existe un activo con id ${req.params.id}`, 404);
-    res.status(201).json(etiquetas);
+    res.status(201).location(`/activos/${req.params.id}/etiquetas/${req.params.etiquetaId}`).json(etiquetas);
   };
 
   // DELETE /activos/:id/etiquetas/:etiquetaId → 204 sin cuerpo (se borró el vínculo; la etiqueta sigue existiendo)

@@ -27,10 +27,11 @@ class OrdenesController {
     res.json(orden);
   };
 
-  // POST /ordenes → 201 (las reglas de negocio las aplica el caso de uso; si alguna falla, el AppError llega al errorHandler)
+  // POST /ordenes → 201 con el header Location: la URL de la orden creada (clase 13)
+  // (las reglas de negocio las aplica el caso de uso; si alguna falla, el AppError llega al errorHandler)
   create = async (req, res) => {
     const orden = await this.#useCases.createOrden(req.body);
-    res.status(201).json(orden);
+    res.status(201).location(`/ordenes/${orden.id}`).json(orden);
   };
 
   // PUT /ordenes/:id (parcial: cantidad, precioLimite, validaHasta, motivo)
