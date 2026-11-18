@@ -2,7 +2,7 @@
 ### Documentación interactiva: http://localhost:8000/api-docs
 ### Correrlos EN ORDEN con el servidor recién arrancado y los datos en la semilla: en memoria alcanza con reiniciar;
 ### en sequelize los datos sobreviven al reinicio, así que antes hay que parar el servidor y borrar database.sqlite.
-### Los 121 casos dan lo mismo en los dos modos (PERSISTENCE_TYPE en .env).
+### Los 123 casos dan lo mismo en los dos modos (PERSISTENCE_TYPE en .env).
 ### Los POST que crean responden 201 con el header Location (la URL de lo creado): se ve en los headers de la respuesta.
 ### Los eventos (54 a 75) no cambian las respuestas: se ven en la consola del servidor y en notifications.log.
 ### Los pedidos con "# @name" guardan su respuesta: los siguientes usan el id creado ({{nombre.response.body.$.id}}).
@@ -765,3 +765,34 @@ DELETE {{base}}/activos/3/etiquetas/5
 
 ### 121. El mismo GET después de quitarla → 404 ETIQUETA_NO_ASIGNADA
 GET {{base}}/activos/3/etiquetas/5
+
+### ===================== LA REGLA 6 TAMBIÉN EN EL ALTA =====================
+### Un activo no nace con más CEDEARs en cartera que su tope: es la misma verificación que al editarlo (casos 69 y 70).
+
+### 122. Alta con más cartera (101) que tope (100) → 409 TOPE_EXCEDIDO
+POST {{base}}/activos
+Content-Type: application/json
+
+{
+  "ticker": "NVDA",
+  "nombre": "NVIDIA",
+  "mercado": "NASDAQ",
+  "ratio": 24,
+  "nivel": "L3",
+  "cantidad": 101,
+  "topeCedears": 100
+}
+
+### 123. Borde: con la cartera justo en el tope (100 de 100) → 201
+POST {{base}}/activos
+Content-Type: application/json
+
+{
+  "ticker": "NVDA",
+  "nombre": "NVIDIA",
+  "mercado": "NASDAQ",
+  "ratio": 24,
+  "nivel": "L3",
+  "cantidad": 100,
+  "topeCedears": 100
+}

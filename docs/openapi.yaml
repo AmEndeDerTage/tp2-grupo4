@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: API Activos y Órdenes
-  version: 1.0.0
+  version: 1.1.0
   description: |
     API REST en capas (Express + Node) sobre un recorte **hipotético** de un sistema de inversiones en CEDEARs.
     Un **Activo** es un CEDEAR seguido por el sistema (nivel de seguimiento, cantidad en cartera y tope permitido).
@@ -119,7 +119,8 @@ paths:
       summary: Dar de alta un activo, opcionalmente con sus etiquetas
       description: |
         Con `etiquetaIds`, es la **operación atómica de la N:N**: el activo y sus vínculos se escriben en una transacción.
-        Reglas, en este orden: **2** ticker único (409) · todas las etiquetas tienen que existir (404, con las que faltan en
+        Reglas, en este orden: **2** ticker único (409) · **6** la cartera inicial no supera el `topeCedears` (409, la misma
+        verificación que al editar el activo) · todas las etiquetas tienen que existir (404, con las que faltan en
         `details`). Si algo falla, el activo no queda creado.
       operationId: crearActivo
       requestBody:
@@ -141,6 +142,9 @@ paths:
               etiquetaInexistente:
                 summary: Con una etiqueta que no existe → 404 y no se crea nada
                 value: { ticker: JNJ, nombre: Johnson & Johnson, mercado: NYSE, ratio: 15, nivel: L1, topeCedears: 20, etiquetaIds: [3, 999] }
+              sobreElTope:
+                summary: Con más cartera que tope → 409 TOPE_EXCEDIDO
+                value: { ticker: NVDA, nombre: NVIDIA, mercado: NASDAQ, ratio: 24, nivel: L3, cantidad: 101, topeCedears: 100 }
       responses:
         "201":
           description: Activo creado, con sus etiquetas. `Location` = `/activos/{id}`
@@ -174,13 +178,21 @@ paths:
                     - { field: etiquetaIds, message: No existe una etiqueta con id 998 }
                     - { field: etiquetaIds, message: No existe una etiqueta con id 999 }
         "409":
-          description: Ya existe un activo con ese ticker (regla de negocio 2)
+          description: Regla de negocio violada (2 o 6); el activo no se creó
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Error"
-              example:
-                error: { code: TICKER_DUPLICADO, message: Ya existe un activo con el ticker KO }
+              examples:
+                tickerDuplicado:
+                  summary: Regla 2 — ya existe un activo con ese ticker
+                  value: { error: { code: TICKER_DUPLICADO, message: Ya existe un activo con el ticker KO } }
+                topeExcedido:
+                  summary: Regla 6 — la cartera inicial supera el tope
+                  value:
+                    error:
+                      code: TOPE_EXCEDIDO
+                      message: "NVDA no puede quedar con tope 100: ya hay 101 comprometidos (101 en cartera + 0 en compras vivas)"
         "500":
           $ref: "#/components/responses/ErrorInterno"
 
