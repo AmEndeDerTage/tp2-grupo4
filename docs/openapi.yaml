@@ -18,6 +18,9 @@ info:
     (`/activos/4`, `/ordenes/4`, `/etiquetas/6`; al asignar una etiqueta, la del vínculo: `/activos/2/etiquetas/1`).
 
     Todos los errores tienen la forma `{ "error": { "code", "message", "details?" } }`.
+    Los que Express detecta antes de llegar a una ruta conservan su status y llevan un código propio: **413**
+    `PAYLOAD_TOO_LARGE` (cuerpo de más de 100 kb), **415** `UNSUPPORTED_MEDIA_TYPE` (charset o compresión no soportados)
+    y **400** `BAD_REQUEST` (URL mal codificada). El **500** queda para lo que no es un error del pedido.
     La persistencia (`memory` | `sequelize`) se elige por variable de entorno y no cambia las respuestas.
 
     **Eventos de dominio** (no cambian ninguna respuesta: son avisos que salen después de guardar). Crear una orden
@@ -193,6 +196,10 @@ paths:
                     error:
                       code: TOPE_EXCEDIDO
                       message: "NVDA no puede quedar con tope 100: ya hay 101 comprometidos (101 en cartera + 0 en compras vivas)"
+        "413":
+          $ref: "#/components/responses/CuerpoDemasiadoGrande"
+        "415":
+          $ref: "#/components/responses/TipoNoSoportado"
         "500":
           $ref: "#/components/responses/ErrorInterno"
 
@@ -268,6 +275,10 @@ paths:
                 topeExcedido:
                   summary: Regla 6 — lo comprometido supera el tope nuevo
                   value: { error: { code: TOPE_EXCEDIDO, "message": "AAPL no puede quedar con tope 25: ya hay 30 comprometidos (10 en cartera + 20 en compras vivas)" } }
+        "413":
+          $ref: "#/components/responses/CuerpoDemasiadoGrande"
+        "415":
+          $ref: "#/components/responses/TipoNoSoportado"
         "500":
           $ref: "#/components/responses/ErrorInterno"
     delete:
@@ -537,6 +548,10 @@ paths:
                 topeExcedido:
                   summary: Regla 6
                   value: { error: { code: TOPE_EXCEDIDO, message: "Comprar 100 AAPL llevaría a 110 CEDEARs (0 en cartera + 10 en compras vivas + 100) y el tope es 30" } }
+        "413":
+          $ref: "#/components/responses/CuerpoDemasiadoGrande"
+        "415":
+          $ref: "#/components/responses/TipoNoSoportado"
         "500":
           $ref: "#/components/responses/ErrorInterno"
 
@@ -615,6 +630,10 @@ paths:
                 topeExcedido:
                   summary: Regla 6
                   value: { error: { code: TOPE_EXCEDIDO, message: "Comprar 25 AAPL llevaría a 35 CEDEARs (0 en cartera + 10 en compras vivas + 25) y el tope es 30" } }
+        "413":
+          $ref: "#/components/responses/CuerpoDemasiadoGrande"
+        "415":
+          $ref: "#/components/responses/TipoNoSoportado"
         "500":
           $ref: "#/components/responses/ErrorInterno"
     delete:
@@ -737,6 +756,10 @@ paths:
           $ref: "#/components/responses/ErrorEntrada"
         "409":
           $ref: "#/components/responses/EtiquetaDuplicada"
+        "413":
+          $ref: "#/components/responses/CuerpoDemasiadoGrande"
+        "415":
+          $ref: "#/components/responses/TipoNoSoportado"
         "500":
           $ref: "#/components/responses/ErrorInterno"
 
@@ -787,6 +810,10 @@ paths:
           $ref: "#/components/responses/EtiquetaNoEncontrada"
         "409":
           $ref: "#/components/responses/EtiquetaDuplicada"
+        "413":
+          $ref: "#/components/responses/CuerpoDemasiadoGrande"
+        "415":
+          $ref: "#/components/responses/TipoNoSoportado"
         "500":
           $ref: "#/components/responses/ErrorInterno"
     delete:
@@ -899,23 +926,31 @@ components:
 
   responses:
     ErrorValidacion:
-      description: Datos de entrada inválidos (body, query o params). `details` lista cada campo con su problema.
+      description: |
+        Datos de entrada inválidos (query o params): `VALIDATION_ERROR`, con `details` por campo. O una URL que no se
+        puede decodificar (`BAD_REQUEST`, lo detecta Express antes de llegar a la ruta).
       content:
         application/json:
           schema:
             $ref: "#/components/schemas/Error"
-          example:
-            error:
-              code: VALIDATION_ERROR
-              message: Datos de body inválidos
-              details:
-                - { field: ticker, message: "El ticker debe tener entre 1 y 10 caracteres: letras mayúsculas, dígitos o punto, empezando con letra" }
-                - { field: ratio, message: El ratio debe ser mayor a 0 }
+          examples:
+            validacion:
+              summary: Un parámetro no cumple el schema
+              value:
+                error:
+                  code: VALIDATION_ERROR
+                  message: Datos de params inválidos
+                  details:
+                    - { field: id, message: El id debe ser un número }
+            urlMalCodificada:
+              summary: La URL no se puede decodificar (p. ej. /activos/%E0%A4%A)
+              value:
+                error: { code: BAD_REQUEST, message: La petición no se pudo interpretar }
     ErrorEntrada:
       description: |
-        Cuerpo inválido. Dos causas, con el mismo formato de error: datos que no cumplen el schema
-        (`VALIDATION_ERROR`, con `details` por campo) o un cuerpo que no es JSON (`INVALID_JSON`, lo detecta
-        `express.json()` antes de llegar a Zod).
+        Pedido inválido. Tres causas, con el mismo formato de error: datos que no cumplen el schema
+        (`VALIDATION_ERROR`, con `details` por campo), un cuerpo que no es JSON (`INVALID_JSON`, lo detecta
+        `express.json()` antes de llegar a Zod) o una URL que no se puede decodificar (`BAD_REQUEST`).
       content:
         application/json:
           schema:
@@ -933,6 +968,26 @@ components:
               summary: El cuerpo no es JSON
               value:
                 error: { code: INVALID_JSON, message: El cuerpo de la petición no es un JSON válido }
+            urlMalCodificada:
+              summary: La URL no se puede decodificar
+              value:
+                error: { code: BAD_REQUEST, message: La petición no se pudo interpretar }
+    CuerpoDemasiadoGrande:
+      description: El cuerpo supera el tamaño máximo que acepta `express.json()` (100 kb). Lo corta Express antes de llegar a la ruta.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            error: { code: PAYLOAD_TOO_LARGE, message: El cuerpo de la petición supera el tamaño máximo permitido }
+    TipoNoSoportado:
+      description: El `charset` del `Content-Type` o la compresión (`Content-Encoding`) del cuerpo no están soportados.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            error: { code: UNSUPPORTED_MEDIA_TYPE, message: El formato o la codificación del cuerpo no están soportados }
     ActivoNoEncontrado:
       description: No existe un activo con ese id
       content:

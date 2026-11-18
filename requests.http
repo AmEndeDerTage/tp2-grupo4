@@ -2,7 +2,7 @@
 ### Documentación interactiva: http://localhost:8000/api-docs
 ### Correrlos EN ORDEN con el servidor recién arrancado y los datos en la semilla: en memoria alcanza con reiniciar;
 ### en sequelize los datos sobreviven al reinicio, así que antes hay que parar el servidor y borrar database.sqlite.
-### Los 123 casos dan lo mismo en los dos modos (PERSISTENCE_TYPE en .env).
+### Los 125 casos dan lo mismo en los dos modos (PERSISTENCE_TYPE en .env).
 ### Los POST que crean responden 201 con el header Location (la URL de lo creado): se ve en los headers de la respuesta.
 ### Los eventos (54 a 75) no cambian las respuestas: se ven en la consola del servidor y en notifications.log.
 ### Los pedidos con "# @name" guardan su respuesta: los siguientes usan el id creado ({{nombre.response.body.$.id}}).
@@ -795,4 +795,19 @@ Content-Type: application/json
   "nivel": "L3",
   "cantidad": 100,
   "topeCedears": 100
+}
+
+### ===================== ERRORES QUE EXPRESS DETECTA ANTES DE LA RUTA =====================
+### No son un 500: el pedido está mal, no el servidor. El errorHandler respeta el status que trae el error.
+### (El tercero, un cuerpo de más de 100 kb → 413 PAYLOAD_TOO_LARGE, no entra cómodo en este archivo.)
+
+### 124. URL mal codificada → 400 BAD_REQUEST
+GET {{base}}/activos/%E0%A4%A
+
+### 125. Charset que no existe → 415 UNSUPPORTED_MEDIA_TYPE
+POST {{base}}/etiquetas
+Content-Type: application/json; charset=foo
+
+{
+  "nombre": "bancos"
 }
