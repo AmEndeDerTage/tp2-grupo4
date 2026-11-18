@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: API Activos y Órdenes
-  version: 0.7.0
+  version: 1.0.0
   description: |
     API REST en capas (Express + Node) sobre un recorte **hipotético** de un sistema de inversiones en CEDEARs.
     Un **Activo** es un CEDEAR seguido por el sistema (nivel de seguimiento, cantidad en cartera y tope permitido).
@@ -112,6 +112,8 @@ paths:
                   - { id: 3, ticker: GGAL, nombre: Grupo Financiero Galicia, mercado: BYMA, ratio: 1, nivel: L1, cantidad: 0, topeCedears: 50, etiquetas: [{ id: 4, nombre: argentina }] }
         "400":
           $ref: "#/components/responses/ErrorValidacion"
+        "500":
+          $ref: "#/components/responses/ErrorInterno"
     post:
       tags: [Activos]
       summary: Dar de alta un activo, opcionalmente con sus etiquetas
@@ -179,6 +181,8 @@ paths:
                 $ref: "#/components/schemas/Error"
               example:
                 error: { code: TICKER_DUPLICADO, message: Ya existe un activo con el ticker KO }
+        "500":
+          $ref: "#/components/responses/ErrorInterno"
 
   /activos/{id}:
     parameters:
@@ -199,6 +203,8 @@ paths:
           $ref: "#/components/responses/ErrorValidacion"
         "404":
           $ref: "#/components/responses/ActivoNoEncontrado"
+        "500":
+          $ref: "#/components/responses/ErrorInterno"
     put:
       tags: [Activos]
       summary: Modificar parcialmente un activo
@@ -250,6 +256,8 @@ paths:
                 topeExcedido:
                   summary: Regla 6 — lo comprometido supera el tope nuevo
                   value: { error: { code: TOPE_EXCEDIDO, "message": "AAPL no puede quedar con tope 25: ya hay 30 comprometidos (10 en cartera + 20 en compras vivas)" } }
+        "500":
+          $ref: "#/components/responses/ErrorInterno"
     delete:
       tags: [Activos]
       summary: Eliminar un activo
@@ -270,6 +278,8 @@ paths:
                 $ref: "#/components/schemas/Error"
               example:
                 error: { code: ACTIVO_CON_ORDENES, "message": "No se puede eliminar el activo 1: tiene 2 orden(es) asociada(s)" }
+        "500":
+          $ref: "#/components/responses/ErrorInterno"
 
   /activos/{id}/ordenes:
     parameters:
@@ -302,6 +312,8 @@ paths:
           $ref: "#/components/responses/ErrorValidacion"
         "404":
           $ref: "#/components/responses/ActivoNoEncontrado"
+        "500":
+          $ref: "#/components/responses/ErrorInterno"
 
   /activos/{id}/etiquetas:
     parameters:
@@ -323,6 +335,8 @@ paths:
           $ref: "#/components/responses/ErrorValidacion"
         "404":
           $ref: "#/components/responses/ActivoNoEncontrado"
+        "500":
+          $ref: "#/components/responses/ErrorInterno"
 
   /activos/{id}/etiquetas/{etiquetaId}:
     parameters:
@@ -345,6 +359,8 @@ paths:
           $ref: "#/components/responses/ErrorValidacion"
         "404":
           $ref: "#/components/responses/VinculoNoEncontrado"
+        "500":
+          $ref: "#/components/responses/ErrorInterno"
     post:
       tags: [Activos, Etiquetas]
       summary: Asignarle una etiqueta a un activo (crear el vínculo)
@@ -384,6 +400,8 @@ paths:
                 $ref: "#/components/schemas/Error"
               example:
                 error: { code: ETIQUETA_YA_ASIGNADA, message: El activo AAPL ya tiene la etiqueta dividendos }
+        "500":
+          $ref: "#/components/responses/ErrorInterno"
     delete:
       tags: [Activos, Etiquetas]
       summary: Quitarle una etiqueta a un activo (borrar el vínculo)
@@ -396,6 +414,8 @@ paths:
           $ref: "#/components/responses/ErrorValidacion"
         "404":
           $ref: "#/components/responses/VinculoNoEncontrado"
+        "500":
+          $ref: "#/components/responses/ErrorInterno"
 
   /ordenes:
     get:
@@ -432,6 +452,8 @@ paths:
                   - { id: 3, activoId: 2, sentido: compra, cantidad: 10, precioLimite: 12.5, validaHasta: "2026-11-27", estado: viva, motivo: null, activo: { id: 2, ticker: AAPL } }
         "400":
           $ref: "#/components/responses/ErrorValidacion"
+        "500":
+          $ref: "#/components/responses/ErrorInterno"
     post:
       tags: [Órdenes]
       summary: Armar una orden (nace viva)
@@ -503,6 +525,8 @@ paths:
                 topeExcedido:
                   summary: Regla 6
                   value: { error: { code: TOPE_EXCEDIDO, message: "Comprar 100 AAPL llevaría a 110 CEDEARs (0 en cartera + 10 en compras vivas + 100) y el tope es 30" } }
+        "500":
+          $ref: "#/components/responses/ErrorInterno"
 
   /ordenes/{id}:
     parameters:
@@ -523,6 +547,8 @@ paths:
           $ref: "#/components/responses/ErrorValidacion"
         "404":
           $ref: "#/components/responses/OrdenNoEncontrada"
+        "500":
+          $ref: "#/components/responses/ErrorInterno"
     put:
       tags: [Órdenes]
       summary: Modificar parcialmente una orden viva
@@ -577,6 +603,8 @@ paths:
                 topeExcedido:
                   summary: Regla 6
                   value: { error: { code: TOPE_EXCEDIDO, message: "Comprar 25 AAPL llevaría a 35 CEDEARs (0 en cartera + 10 en compras vivas + 25) y el tope es 30" } }
+        "500":
+          $ref: "#/components/responses/ErrorInterno"
     delete:
       tags: [Órdenes]
       summary: Borrar una orden viva (es la forma de cancelarla)
@@ -596,6 +624,8 @@ paths:
                 $ref: "#/components/schemas/Error"
               example:
                 error: { code: ORDEN_NO_MODIFICABLE, "message": "La orden 2 ya está ejecutada: no se puede borrar" }
+        "500":
+          $ref: "#/components/responses/ErrorInterno"
 
   /ordenes/{id}/ejecucion:
     parameters:
@@ -635,6 +665,8 @@ paths:
                 cantidadInsuficiente:
                   summary: Regla 5 — la cartera no alcanza para la venta
                   value: { error: { code: CANTIDAD_INSUFICIENTE, "message": "No se puede ejecutar la venta 6 de 5 KO: hay 3 en cartera" } }
+        "500":
+          $ref: "#/components/responses/ErrorInterno"
 
   /etiquetas:
     get:
@@ -664,6 +696,8 @@ paths:
                   - { id: 5, nombre: energia }
         "400":
           $ref: "#/components/responses/ErrorValidacion"
+        "500":
+          $ref: "#/components/responses/ErrorInterno"
     post:
       tags: [Etiquetas]
       summary: Crear una etiqueta
@@ -691,6 +725,8 @@ paths:
           $ref: "#/components/responses/ErrorEntrada"
         "409":
           $ref: "#/components/responses/EtiquetaDuplicada"
+        "500":
+          $ref: "#/components/responses/ErrorInterno"
 
   /etiquetas/{id}:
     parameters:
@@ -711,6 +747,8 @@ paths:
           $ref: "#/components/responses/ErrorValidacion"
         "404":
           $ref: "#/components/responses/EtiquetaNoEncontrada"
+        "500":
+          $ref: "#/components/responses/ErrorInterno"
     put:
       tags: [Etiquetas]
       summary: Renombrar una etiqueta
@@ -737,6 +775,8 @@ paths:
           $ref: "#/components/responses/EtiquetaNoEncontrada"
         "409":
           $ref: "#/components/responses/EtiquetaDuplicada"
+        "500":
+          $ref: "#/components/responses/ErrorInterno"
     delete:
       tags: [Etiquetas]
       summary: Eliminar una etiqueta (y sacarla de todos los activos)
@@ -751,6 +791,8 @@ paths:
           $ref: "#/components/responses/ErrorValidacion"
         "404":
           $ref: "#/components/responses/EtiquetaNoEncontrada"
+        "500":
+          $ref: "#/components/responses/ErrorInterno"
 
 components:
   parameters:
@@ -928,6 +970,16 @@ components:
             $ref: "#/components/schemas/Error"
           example:
             error: { code: ETIQUETA_DUPLICADA, message: Ya existe una etiqueta con el nombre dividendos }
+    ErrorInterno:
+      description: |
+        Error no previsto (una falla de la base, un bug). No es una regla de negocio: el detalle queda en la
+        consola del servidor y al cliente le llega un mensaje genérico, sin `details`.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            error: { code: INTERNAL_ERROR, message: Ocurrió un error inesperado en el servidor }
 
   schemas:
     Mercado:
