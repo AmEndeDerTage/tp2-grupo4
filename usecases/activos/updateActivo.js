@@ -4,7 +4,8 @@ import { verificarCompromisos, evaluarTopeCerca } from "../ordenes/reglasOrden.j
 
 /**
  * Caso de uso: modificar parcialmente un activo.
- * Devuelve el activo actualizado o `null` si no existe (el 404 lo decide el controlador).
+ * Devuelve el activo actualizado o `null` si no existe (el 404 lo decide el controlador). Que exista es lo primero
+ * que se mira: editar un activo inexistente es un 404 aunque el ticker pedido sea el de otro (no un 409).
  * Reglas:
  *   2. si cambia el ticker, no puede ser el de OTRO activo                       → TICKER_DUPLICADO (409)
  *   5 y 6. si cambia `cantidad` o `topeCedears`, lo comprometido en órdenes vivas
@@ -22,25 +23,25 @@ async function updateActivo(id, cambios, activosDao, ordenesDao, events, transac
   const tocaCupo = cambios.cantidad !== undefined || cambios.topeCedears !== undefined;
 
   const resultado = await transaccion(async (tx) => {
+    const actual = await activosDao.getById(id, tx);
+    if (!actual) return null;
+
     if (cambios.ticker !== undefined) {
       const existente = await activosDao.getByTicker(cambios.ticker, tx);
-      if (existente && existente.id !== Number(id)) {
+      if (existente && existente.id !== actual.id) {
         throw new AppError("TICKER_DUPLICADO", `Ya existe otro activo con el ticker ${cambios.ticker}`, 409);
       }
     }
 
     let comprasVivas = [];
     if (tocaCupo) {
-      const actual = await activosDao.getById(id, tx);
-      if (!actual) return null;
-
-      const { items: vivas } = await ordenesDao.getAll({ activoId: Number(id), estado: "viva" }, tx);
+      const { items: vivas } = await ordenesDao.getAll({ activoId: actual.id, estado: "viva" }, tx);
       verificarCompromisos({ ...actual, ...cambios }, vivas);
       comprasVivas = vivas.filter((o) => o.sentido === "compra");
     }
 
     const actualizado = await activosDao.update(id, cambios, tx);
-    return actualizado && { actualizado, comprasVivas };
+    return { actualizado, comprasVivas };
   });
   if (!resultado) return null;
 

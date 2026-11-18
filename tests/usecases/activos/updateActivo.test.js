@@ -22,6 +22,10 @@ describe("regla 2 al editar — el ticker no puede ser el de otro activo", () =>
   it("un activo que no existe → null", async () => {
     await expect(escenario().activos.updateActivo(99, { nombre: "X" })).resolves.toBeNull();
   });
+
+  it("que exista se mira antes que la regla: un activo inexistente con el ticker de otro → null (404), no TICKER_DUPLICADO", async () => {
+    await expect(escenario().activos.updateActivo(99, { ticker: "KO" })).resolves.toBeNull();
+  });
 });
 
 describe("reglas 5 y 6 desde el activo (D3) — lo comprometido en órdenes vivas tiene que seguir entrando", () => {

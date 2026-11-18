@@ -2,7 +2,7 @@
 ### Documentación interactiva: http://localhost:8000/api-docs
 ### Correrlos EN ORDEN con el servidor recién arrancado y los datos en la semilla: en memoria alcanza con reiniciar;
 ### en sequelize los datos sobreviven al reinicio, así que antes hay que parar el servidor y borrar database.sqlite.
-### Los 125 casos dan lo mismo en los dos modos (PERSISTENCE_TYPE en .env).
+### Los 127 casos dan lo mismo en los dos modos (PERSISTENCE_TYPE en .env).
 ### Los POST que crean responden 201 con el header Location (la URL de lo creado): se ve en los headers de la respuesta.
 ### Los eventos (54 a 75) no cambian las respuestas: se ven en la consola del servidor y en notifications.log.
 ### Los pedidos con "# @name" guardan su respuesta: los siguientes usan el id creado ({{nombre.response.body.$.id}}).
@@ -810,4 +810,23 @@ Content-Type: application/json; charset=foo
 
 {
   "nombre": "bancos"
+}
+
+### ===================== PRIMERO QUE EXISTA, DESPUÉS LA REGLA =====================
+### Editar algo que no existe es un 404 aunque el valor pedido choque con otro registro (no un 409).
+
+### 126. Editar un activo inexistente con el ticker de otro → 404 ACTIVO_NO_ENCONTRADO
+PUT {{base}}/activos/999
+Content-Type: application/json
+
+{
+  "ticker": "KO"
+}
+
+### 127. Renombrar una etiqueta inexistente con el nombre de otra → 404 ETIQUETA_NO_ENCONTRADA
+PUT {{base}}/etiquetas/999
+Content-Type: application/json
+
+{
+  "nombre": "dividendos"
 }
