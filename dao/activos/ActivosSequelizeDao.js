@@ -1,6 +1,6 @@
 import { UniqueConstraintError, Op } from "sequelize";
-import { sequelize, ActivoModel, EtiquetaModel, ActivoEtiquetaModel } from "../models/index.js";
-import { SEMILLA_ACTIVOS } from "../semilla.js";
+import { sequelize, ActivoModel, OrdenModel, EtiquetaModel, ActivoEtiquetaModel } from "../models/index.js";
+import { SEMILLA_ACTIVOS, SEMILLA_ORDENES, SEMILLA_ETIQUETAS, SEMILLA_ACTIVO_ETIQUETAS } from "../semilla.js";
 import { transaccionSequelize } from "../transacciones.js";
 import AppError from "../../errors/AppError.js";
 
@@ -22,8 +22,12 @@ const ORDEN_ETIQUETAS = [{ model: EtiquetaModel, as: "etiquetas" }, "id", "ASC"]
  */
 class ActivosSequelizeDao {
   /**
-   * Crea las tablas que falten y siembra la de activos si está vacía.
-   * sync() crea TODAS las tablas de los modelos asociados, también `ordenes`.
+   * Crea las tablas que falten y, si la base es nueva, la siembra entera.
+   * sync() crea TODAS las tablas de los modelos asociados (`ordenes`, `etiquetas`, `activo_etiquetas`), y por eso la
+   * semilla también se carga acá, toda junta: es de la BASE nueva, no de cada tabla vacía. Una base es nueva cuando no
+   * tiene activos. Va en una transacción (todo o nada) y en el orden que piden las claves foráneas: primero los dos
+   * extremos de cada relación, después lo que los une. Sembrar tabla por tabla «si está vacía» revivía datos borrados
+   * a propósito (p. ej. todas las etiquetas) y, si además faltaba un activo de la semilla, el arranque fallaba.
    *
    * sync() simple y NO sync({ alter: true }) como en el ejemplo de la materia: en SQLite, `alter` reconstruye cada
    * tabla borrándola, y al borrar `activos` la clave foránea actúa sobre `ordenes`. Probado: con CASCADE el segundo
@@ -35,7 +39,12 @@ class ActivosSequelizeDao {
 
     const cantidad = await ActivoModel.count();
     if (cantidad === 0) {
-      await ActivoModel.bulkCreate(SEMILLA_ACTIVOS);
+      await sequelize.transaction(async (t) => {
+        await ActivoModel.bulkCreate(SEMILLA_ACTIVOS, { transaction: t });
+        await OrdenModel.bulkCreate(SEMILLA_ORDENES, { transaction: t });
+        await EtiquetaModel.bulkCreate(SEMILLA_ETIQUETAS, { transaction: t });
+        await ActivoEtiquetaModel.bulkCreate(SEMILLA_ACTIVO_ETIQUETAS, { transaction: t });
+      });
     }
   }
 

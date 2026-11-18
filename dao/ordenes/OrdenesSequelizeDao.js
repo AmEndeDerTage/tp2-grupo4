@@ -1,6 +1,5 @@
 import { Op, literal } from "sequelize";
 import { ActivoModel, OrdenModel } from "../models/index.js";
-import { SEMILLA_ORDENES } from "../semilla.js";
 import { transaccionSequelize } from "../transacciones.js";
 
 // Columnas pedidas explícitamente, en el mismo orden en que las devuelve el DAO en memoria
@@ -12,20 +11,12 @@ const INCLUDE = [{ model: ActivoModel, as: "activo", attributes: ["id", "ticker"
 /**
  * Adaptador DAO de Órdenes con Sequelize (SQLite), el lado "N" de la relación Activo 1:N Orden.
  * Respeta la misma interfaz pública que OrdenesMemoryDao.
- * La tabla `ordenes` ya la creó sequelize.sync() en ActivosSequelizeDao.init(): el container inicializa Activos primero.
+ * La tabla `ordenes` la crea (y la siembra, si la base es nueva) ActivosSequelizeDao.init(): por eso este DAO no tiene init().
  * Los métodos que se usan dentro de una transacción reciben un `tx` opcional al final y lo pasan a cada consulta.
  * Ojo con las relecturas (save y update releen con getById): también llevan `tx`. Una fila recién escrita en una
  * transacción todavía no confirmada solo es visible dentro de esa transacción.
  */
 class OrdenesSequelizeDao {
-  // Siembra si la tabla está vacía. Va después de la semilla de Activos: la clave foránea exige que el activo exista.
-  async init() {
-    const cantidad = await OrdenModel.count();
-    if (cantidad === 0) {
-      await OrdenModel.bulkCreate(SEMILLA_ORDENES);
-    }
-  }
-
   /**
    * Lista órdenes: los filtros, el orden y la paginación los resuelve la base (WHERE / ORDER BY / LIMIT).
    * filtros: { activoId, estado, sentido, sort ("precioLimite" | "-precioLimite"), page, limit }
