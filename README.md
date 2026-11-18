@@ -160,3 +160,66 @@ Los dos modos responden igual ante los mismos pedidos (misma forma y mismos cód
 Con el servidor andando: **[`http://localhost:8000/api-docs`](http://localhost:8000/api-docs)**.
 
 Es Swagger UI sobre la especificación OpenAPI 3 de `docs/openapi.yaml`, servida con `swagger-ui-express`. Cada endpoint tiene sus parámetros, cuerpos con ejemplos y todas sus respuestas posibles (200 · 201 · 204 · 400 · 404 · 409 · 500). Los schemas de las entidades y del error se definen una vez en `components/schemas` y se reutilizan con `$ref`. «Try it out» funciona contra el servidor en los dos modos de persistencia. El listado de endpoints vive ahí y no se repite en este README.
+
+## Eventos de dominio
+
+Un único bus (`EventEmitter`) se crea en el container (`container/container.js`) y se inyecta a los casos de uso. Cada caso de uso emite **después de guardar** (en las operaciones con transacción, después del commit), con un objeto plano que arma él mismo. Los listeners viven aparte, en `alerts/registerAlertListeners.js`: deciden qué decir y se lo pasan a un notificador (`notifications/`) con un contrato común, `notify({ subject, body })`. Cada listener atrapa sus propios errores: si un aviso falla, se registra en la consola y la operación responde igual.
+
+| Evento | Lo emite | Qué hace su listener | Canal |
+|---|---|---|---|
+| `orden.creada` | crear una orden | Arma la **tabla para colocar a mano**: activo, operación, cantidad, precio límite, monto al límite y validez | el de `NOTIFIER_TYPE` (consola o archivo) |
+| `activo.topeCerca` | crear una compra, editar su cantidad, o editar `cantidad`/`topeCedears` de un activo, cuando cartera + compras vivas llega al `TOPE_CERCA_PCT` % del tope | Avisa cuántos CEDEARs están comprometidos sobre el tope | **archivo y consola a la vez**, con un notificador compuesto |
+| `orden.ejecutada` | ejecutar una orden (`POST /ordenes/{id}/ejecucion`) | Resume cómo cambió la cartera (y el nivel, si cambió) | el de `NOTIFIER_TYPE` |
+
+Por ejemplo, crear una compra de 18 AAPL a US$ 12 con la semilla imprime en la consola:
+
+```
+[NOTIFICACIÓN] Orden #4 para colocar a mano
+  Activo          | AAPL
+  Operación       | COMPRA
+  Cantidad        | 18 CEDEARs
+  Precio límite   | US$ 12.00 por CEDEAR
+  Monto al límite | US$ 216.00
+  Válida hasta    | 2026-12-15
+[NOTIFICACIÓN] AAPL cerca del tope
+28 de 30 CEDEARs comprometidos (93.3 %): 0 en cartera + 28 en compras vivas. Aviso desde el 90 %.
+```
+
+El aviso de tope además queda en `notifications.log`. Para ver que un notificador roto no tumba la operación, apuntá el archivo a una ruta imposible (`NOTIFIER_TYPE=file` y `NOTIFICATIONS_LOG_PATH=Z:\no\existe.log`): la orden se crea igual y la consola registra `[alertas] No se pudo notificar …`.
+
+## Pruebas
+
+**Tests de los casos de uso** (Vitest, con los DAO en memoria como doble: sin base ni red):
+
+```bash
+npm test
+```
+
+Están en `tests/usecases/`, con la misma organización que `usecases/`, y cubren las reglas de negocio en sus casos feliz, de borde y de violación (verificando además que el estado no cambie y que no se emitan eventos), la ejecución con su vuelta atrás ante una falla, el alta atómica con etiquetas y los vínculos de la N:N. `tests/helpers/escenario.js` arma en cada test DAOs nuevos con sus propios datos y un bus espía.
+
+**Pruebas manuales:** `requests.http` tiene los pedidos de punta a punta, cada uno con el resultado esperado en su título (`→ 409 TOPE_EXCEDIDO`). Se corre con la extensión **REST Client** de VS Code, en orden y con el servidor recién arrancado (en `sequelize`, después de borrar `database.sqlite`), en cualquiera de los dos modos.
+
+## Arquitectura
+
+```
+index.js            arranque: middlewares, container, notFound y errorHandler
+config/             variables de entorno (único lector de process.env)
+container/          Composition Root: DAO → casos de uso → controladores → routers
+routes/             mapea método + ruta → validación Zod → controlador
+controllers/        traduce HTTP ↔ casos de uso (status, Location, 404)
+schemas/            schemas Zod de body, query y params
+usecases/           casos de uso y reglas de negocio (no conocen HTTP ni la base)
+dao/                DAO en memoria y en Sequelize con la misma interfaz, factory, modelos, semilla, transacciones
+connection/         conexión de Sequelize a SQLite
+events/  alerts/  notifications/   bus de eventos, listeners y notificadores
+middlewares/  errors/              logger, validación, notFound, errorHandler y AppError
+docs/               openapi.yaml y el router de Swagger UI
+tests/              tests de casos de uso (Vitest)
+```
+
+## Requisitos opcionales implementados
+
+- **Filtros, ordenamiento y paginación** en los listados (`?nivel=&mercado=&etiqueta=&sort=-cantidad&page=1&limit=20`), con metadata `{ page, limit, total, data }`.
+- **Relación N:N con tabla intermedia** (Activo–Etiqueta) y **operaciones atómicas** en transacción: la ejecución de una orden (marca la orden y mueve la cartera juntas) y el alta de un activo con sus etiquetas (todo o nada).
+- **Segundo evento con un notificador adicional**: `activo.topeCerca` por archivo y consola (y un tercero, `orden.ejecutada`).
+- **Tests automatizados de los casos de uso** con DAO en memoria como doble.
