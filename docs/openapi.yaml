@@ -230,7 +230,8 @@ paths:
       description: |
         Solo se pisan los campos enviados. Hay que enviar al menos uno. Reglas: **2** el ticker no puede ser el de otro
         activo · **5 y 6 vistas desde el activo** si cambia `cantidad` o `topeCedears`, lo comprometido en órdenes vivas
-        tiene que seguir entrando (la cartera cubre las ventas vivas; cartera + compras vivas ≤ tope).
+        tiene que seguir entrando (la cartera cubre las ventas vivas; cartera + compras vivas ≤ tope) · **4 vista desde
+        el activo** si cambia `nivel` y el activo tiene compras vivas, el nivel nuevo tiene que ser `L2` o `L3`.
         Si el cambio toca `cantidad` o `topeCedears` y lo comprometido llega a `TOPE_CERCA_PCT` % del tope, emite `activo.topeCerca`.
         Las etiquetas no se cambian acá, sino con `POST`/`DELETE /activos/{id}/etiquetas/{etiquetaId}`.
       operationId: actualizarActivo
@@ -260,7 +261,7 @@ paths:
         "404":
           $ref: "#/components/responses/ActivoNoEncontrado"
         "409":
-          description: Una regla de negocio impide el cambio (regla 2, o reglas 5 y 6 vistas desde el activo)
+          description: Una regla de negocio impide el cambio (regla 2, o reglas 4, 5 y 6 vistas desde el activo)
           content:
             application/json:
               schema:
@@ -275,6 +276,9 @@ paths:
                 topeExcedido:
                   summary: Regla 6 — lo comprometido supera el tope nuevo
                   value: { error: { code: TOPE_EXCEDIDO, "message": "AAPL no puede quedar con tope 25: ya hay 30 comprometidos (10 en cartera + 20 en compras vivas)" } }
+                nivelNoOperable:
+                  summary: Regla 4 — tiene compras vivas y el nivel nuevo no permite comprar
+                  value: { error: { code: NIVEL_NO_OPERABLE, "message": "AAPL no puede pasar a nivel L1: tiene 1 compra(s) viva(s) y solo se compra en L2 o L3" } }
         "413":
           $ref: "#/components/responses/CuerpoDemasiadoGrande"
         "415":

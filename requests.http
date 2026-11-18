@@ -2,7 +2,7 @@
 ### Documentación interactiva: http://localhost:8000/api-docs
 ### Correrlos EN ORDEN con el servidor recién arrancado y los datos en la semilla: en memoria alcanza con reiniciar;
 ### en sequelize los datos sobreviven al reinicio, así que antes hay que parar el servidor y borrar database.sqlite.
-### Los 127 casos dan lo mismo en los dos modos (PERSISTENCE_TYPE en .env).
+### Los 131 casos dan lo mismo en los dos modos (PERSISTENCE_TYPE en .env).
 ### Los POST que crean responden 201 con el header Location (la URL de lo creado): se ve en los headers de la respuesta.
 ### Los eventos (54 a 75) no cambian las respuestas: se ven en la consola del servidor y en notifications.log.
 ### Los pedidos con "# @name" guardan su respuesta: los siguientes usan el id creado ({{nombre.response.body.$.id}}).
@@ -829,4 +829,49 @@ Content-Type: application/json
 
 {
   "nombre": "dividendos"
+}
+
+### ===================== LA REGLA 4 VISTA DESDE EL ACTIVO =====================
+### Un activo con compras vivas no puede pasar a un nivel donde no se compra (L0 o L1): antes hay que borrar o ejecutar esas compras.
+
+### 128. (preparación) Alta de un activo en L2 → 201
+# @name tsla
+POST {{base}}/activos
+Content-Type: application/json
+
+{
+  "ticker": "TSLA",
+  "nombre": "Tesla",
+  "mercado": "NASDAQ",
+  "ratio": 15,
+  "nivel": "L2",
+  "topeCedears": 50
+}
+
+### 129. (preparación) Una compra viva de 5 TSLA → 201 · consola: tabla de COMPRA
+POST {{base}}/ordenes
+Content-Type: application/json
+
+{
+  "activoId": {{tsla.response.body.$.id}},
+  "sentido": "compra",
+  "cantidad": 5,
+  "precioLimite": 20,
+  "validaHasta": "2026-12-15"
+}
+
+### 130. Bajar TSLA a L1 con su compra viva → 409 NIVEL_NO_OPERABLE
+PUT {{base}}/activos/{{tsla.response.body.$.id}}
+Content-Type: application/json
+
+{
+  "nivel": "L1"
+}
+
+### 131. Borde: pasarlo a L3, que también permite comprar → 200
+PUT {{base}}/activos/{{tsla.response.body.$.id}}
+Content-Type: application/json
+
+{
+  "nivel": "L3"
 }
