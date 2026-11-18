@@ -2,7 +2,8 @@ import AppError from "../../errors/AppError.js";
 
 /**
  * Reglas de negocio de Órdenes, escritas UNA sola vez y reutilizadas por los casos de uso
- * (createOrden, updateOrden y ejecutarOrden; verificarCompromisos la usan createActivo y updateActivo). Cada función verifica una regla y,
+ * (createOrden, updateOrden y ejecutarOrden; verificarCompromisos y verificarNivelConCompras son las mismas reglas vistas desde
+ * el activo, para createActivo y updateActivo). Cada función verifica una regla y,
  * si no se cumple, lanza un AppError con su código; si se cumple, no hace nada (o devuelve lo que buscó).
  * No conocen HTTP ni ninguna implementación concreta de DAO: reciben los DAOs por parámetro.
  * Las que leen datos reciben además el `tx` de la transacción del caso de uso, para leer dentro de ella.
@@ -140,6 +141,22 @@ function verificarCompromisos(activo, vivas) {
 }
 
 /**
+ * Regla 4 vista desde el activo (PUT /activos/:id que cambia `nivel`): un activo con compras vivas no puede pasar a un
+ * nivel donde no se compra (NIVEL_NO_OPERABLE, 409). Antes hay que borrar o ejecutar esas compras.
+ * `activo` llega ya con los cambios aplicados; `vivas`, todas las órdenes vivas del activo.
+ */
+function verificarNivelConCompras(activo, vivas) {
+  const compras = vivas.filter((o) => o.sentido === "compra").length;
+  if (compras > 0 && !NIVELES_COMPRABLES.includes(activo.nivel)) {
+    throw new AppError(
+      "NIVEL_NO_OPERABLE",
+      `${activo.ticker} no puede pasar a nivel ${activo.nivel}: tiene ${compras} compra(s) viva(s) y solo se compra en ${NIVELES_COMPRABLES.join(" o ")}`,
+      409
+    );
+  }
+}
+
+/**
  * Regla 5 al ejecutar una venta: lo que se vende tiene que estar en cartera (CANTIDAD_INSUFICIENTE, 409).
  * Al crear y al editar ya se verificó contra lo disponible; acá se vuelve a mirar porque la ejecución es lo que
  * efectivamente saca los CEDEARs de la cartera. (Una compra no se verifica: lo comprometido no cambia al ejecutarla.)
@@ -177,6 +194,7 @@ export {
   verificarCupo,
   evaluarTopeCerca,
   verificarCompromisos,
+  verificarNivelConCompras,
   verificarCarteraParaEjecutar,
   nivelTrasEjecucion,
 };

@@ -61,6 +61,35 @@ describe("reglas 5 y 6 desde el activo (D3) — lo comprometido en órdenes viva
   });
 });
 
+describe("regla 4 desde el activo — con compras vivas, el nivel nuevo tiene que permitir comprar", () => {
+  // AAPL en L2 con una compra viva de 10
+  const conCompraViva = () =>
+    crearEscenario({ activos: [unActivo({ id: 2, ticker: "AAPL", nivel: "L2", cantidad: 0, topeCedears: 30 })], ordenes: [unaOrden({ activoId: 2, sentido: "compra", cantidad: 10 })] });
+
+  it("feliz: sin compras vivas, el nivel baja a L1 (una venta viva no lo impide: vender no depende del nivel)", async () => {
+    const esc = crearEscenario({ activos: [unActivo({ nivel: "L3", cantidad: 40 })], ordenes: [unaOrden({ sentido: "venta", cantidad: 10 })] });
+    await expect(esc.activos.updateActivo(1, { nivel: "L1" })).resolves.toMatchObject({ nivel: "L1" });
+  });
+
+  it("borde: con compras vivas puede pasar de L2 a L3, que también permite comprar", async () => {
+    await expect(conCompraViva().activos.updateActivo(2, { nivel: "L3" })).resolves.toMatchObject({ nivel: "L3" });
+  });
+
+  it("la viola: bajar a L1 con una compra viva → 409 NIVEL_NO_OPERABLE y el estado no cambió", async () => {
+    const esc = conCompraViva();
+    const antes = await estado(esc);
+
+    await expect(esc.activos.updateActivo(2, { nivel: "L1" })).rejects.toMatchObject({ code: "NIVEL_NO_OPERABLE", statusCode: 409 });
+    expect(await estado(esc)).toEqual(antes);
+    expect(esc.events.emit).not.toHaveBeenCalled();
+  });
+
+  it("una compra ya ejecutada no cuenta: es historia, no una compra viva", async () => {
+    const esc = crearEscenario({ activos: [unActivo({ nivel: "L3", cantidad: 10 })], ordenes: [unaOrden({ sentido: "compra", cantidad: 10, estado: "ejecutada" })] });
+    await expect(esc.activos.updateActivo(1, { nivel: "L1" })).resolves.toMatchObject({ nivel: "L1" });
+  });
+});
+
 describe("activo.topeCerca al editar (D6) — con el umbral inyectado", () => {
   // AAPL: 10 en cartera y 20 en compras vivas = 30 comprometidos
   const escenario = (topeCercaPct) =>

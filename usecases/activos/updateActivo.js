@@ -1,6 +1,6 @@
 import AppError from "../../errors/AppError.js";
 import EVENTS from "../../events/eventNames.js";
-import { verificarCompromisos, evaluarTopeCerca } from "../ordenes/reglasOrden.js";
+import { verificarCompromisos, verificarNivelConCompras, evaluarTopeCerca } from "../ordenes/reglasOrden.js";
 
 /**
  * Caso de uso: modificar parcialmente un activo.
@@ -10,6 +10,10 @@ import { verificarCompromisos, evaluarTopeCerca } from "../ordenes/reglasOrden.j
  *   2. si cambia el ticker, no puede ser el de OTRO activo                       → TICKER_DUPLICADO (409)
  *   5 y 6. si cambia `cantidad` o `topeCedears`, lo comprometido en órdenes vivas
  *      tiene que seguir entrando (verificarCompromisos)                           → CANTIDAD_INSUFICIENTE / TOPE_EXCEDIDO (409)
+ *   4. si cambia `nivel` y el activo tiene compras vivas, el nivel nuevo tiene que
+ *      permitir comprar (verificarNivelConCompras)                                → NIVEL_NO_OPERABLE (409)
+ * Las tres son reglas de Órdenes vistas desde el activo: sin ellas, editando el activo se llegaría a órdenes vivas
+ * que las reglas no dejan crear.
  * Leer, verificar y guardar van en una transacción, como en los casos de uso de Órdenes: si no, una orden creada en el
  * medio podría quedar fuera de la cuenta.
  *
@@ -34,9 +38,10 @@ async function updateActivo(id, cambios, activosDao, ordenesDao, events, transac
     }
 
     let comprasVivas = [];
-    if (tocaCupo) {
+    if (tocaCupo || cambios.nivel !== undefined) {
       const { items: vivas } = await ordenesDao.getAll({ activoId: actual.id, estado: "viva" }, tx);
-      verificarCompromisos({ ...actual, ...cambios }, vivas);
+      if (tocaCupo) verificarCompromisos({ ...actual, ...cambios }, vivas);
+      if (cambios.nivel !== undefined) verificarNivelConCompras({ ...actual, ...cambios }, vivas);
       comprasVivas = vivas.filter((o) => o.sentido === "compra");
     }
 
