@@ -23,7 +23,7 @@ OrdenModel.belongsTo(ActivoModel, { foreignKey: "activoId", as: "activo", onDele
 //   - desde el activo (as: "etiquetas"): include de sus etiquetas, activo.getEtiquetas(), activo.hasEtiqueta()
 //   - desde la etiqueta (as: "activos"): etiqueta.getActivos(), que usa el filtro GET /activos?etiqueta=
 // onDelete CASCADE en los dos lados: el vínculo no sobrevive a ninguno de sus extremos. Borrar una etiqueta la saca de
-// todos los activos (decisión de S6b) y borrar un activo (sin órdenes: regla 8) se lleva sus vínculos. Es lo que Sequelize
+// todos los activos (ver deleteEtiqueta) y borrar un activo (sin órdenes: regla 8) se lleva sus vínculos. Es lo que Sequelize
 // pone por defecto en una N:N; se declara para que se lea. A diferencia de las órdenes, un vínculo no es historia.
 ActivoModel.belongsToMany(EtiquetaModel, {
   through: ActivoEtiquetaModel,

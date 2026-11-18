@@ -70,7 +70,7 @@ class EtiquetasSequelizeDao {
   }
 
   // Dos altas simultáneas con el mismo nombre pasan las dos el chequeo del caso de uso; la segunda choca contra el
-  // UNIQUE de la base. Se traduce a su error de dominio (mismo criterio que el ticker, B11): sin esto sería un 500.
+  // UNIQUE de la base. Se traduce a su error de dominio (mismo criterio que el ticker en ActivosSequelizeDao): sin esto sería un 500.
   #traducirNombreDuplicado(error, nombre) {
     if (error instanceof UniqueConstraintError) {
       throw new AppError("ETIQUETA_DUPLICADA", `Ya existe una etiqueta con el nombre ${nombre}`, 409);

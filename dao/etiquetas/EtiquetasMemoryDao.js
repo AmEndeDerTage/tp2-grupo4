@@ -30,7 +30,7 @@ class EtiquetasMemoryDao {
       const campo = desc ? sort.slice(1) : sort;
       resultado.sort((a, b) => {
         if (a[campo] === b[campo]) return a.id - b.id; // desempate estable por id
-        // Por código de carácter, igual que SQLite (ver C2 en el registro de divergencias)
+        // Por código de carácter, igual que SQLite; localeCompare ordenaría distinto (minúsculas, tildes)
         const cmp = a[campo] < b[campo] ? -1 : 1;
         return desc ? -cmp : cmp;
       });

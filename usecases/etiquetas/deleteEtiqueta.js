@@ -1,6 +1,6 @@
 /**
  * Caso de uso: eliminar una etiqueta.
- * Una etiqueta en uso se borra igual y desaparece de todos los activos que la tenían (decisión de S6b): un vínculo es
+ * Una etiqueta en uso se borra igual y desaparece de todos los activos que la tenían (decisión de diseño): un vínculo es
  * una clasificación, no historia. Es la diferencia con la regla 8, que no deja borrar un activo con órdenes porque
  * las órdenes sí son historia.
  * Dos escrituras que van juntas, en una transacción: quitar los vínculos (DAO de Activos, que es quien los guarda)

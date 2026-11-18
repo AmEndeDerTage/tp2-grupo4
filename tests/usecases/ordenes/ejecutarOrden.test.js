@@ -56,8 +56,8 @@ describe("regla 7 — una orden ejecutada no se vuelve a ejecutar", () => {
   });
 });
 
-describe("regla 5 al ejecutar — lo que se vende tiene que estar en cartera (D11)", () => {
-  // Por HTTP este estado ya no se puede armar (desde D3, la cartera no baja de lo comprometido en ventas vivas);
+describe("regla 5 al ejecutar — lo que se vende tiene que estar en cartera", () => {
+  // Por HTTP este estado no se puede armar (updateActivo no deja bajar la cartera de lo comprometido en ventas vivas);
   // acá se carga directo en el DAO en memoria para probar que la regla sigue en pie.
   it("vender 10 con 5 en cartera → 409 CANTIDAD_INSUFICIENTE y el estado no cambió", async () => {
     const esc = crearEscenario({ activos: [unActivo({ cantidad: 5 })], ordenes: [unaOrden({ sentido: "venta", cantidad: 10 })] });
@@ -69,7 +69,7 @@ describe("regla 5 al ejecutar — lo que se vende tiene que estar en cartera (D1
   });
 });
 
-describe("si la escritura falla a mitad, no queda nada (D11, con un DAO que falla)", () => {
+describe("si la escritura falla a mitad, no queda nada (con un DAO que falla)", () => {
   const escenario = () =>
     crearEscenario({ activos: [unActivo({ nivel: "L2", cantidad: 0 })], ordenes: [unaOrden({ sentido: "compra", cantidad: 10 })] });
 

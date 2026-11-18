@@ -7,7 +7,7 @@ import AppError from "../../errors/AppError.js";
  * y el historial de órdenes ejecutadas no queda huérfano.
  * Por eso este caso de uso de Activos recibe también el DAO de Órdenes (como deleteBook del profesor con loansDao).
  * Contar y borrar van en una transacción: si no, una orden creada en el medio pasaría la regla y la FK RESTRICT
- * respondería con un 500 (limitación D1).
+ * respondería con un 500 en lugar del 409 de la regla.
  * Devuelve `true` si lo borró o `false` si no existía.
  */
 async function deleteActivo(id, activosDao, ordenesDao, transaccion) {

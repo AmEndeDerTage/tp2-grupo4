@@ -28,7 +28,7 @@ import {
  * test puede probarlo con otro umbral sin tocar el .env. Instanciar un notificador tampoco le toca: es el canal.
  *
  * Leer, verificar y guardar van dentro de UNA transacción (`transaccion`, inyectada): si no, dos pedidos simultáneos
- * leen lo mismo, pasan los dos las reglas 3, 5 y 6 y se guardan los dos (la carrera A1). Los eventos se emiten
+ * leen lo mismo, pasan los dos las reglas 3, 5 y 6 y se guardan los dos (una condición de carrera). Los eventos se emiten
  * DESPUÉS de que la transacción confirmó: adentro, un rollback posterior dejaría anunciado algo que no pasó.
  */
 async function createOrden(data, ordenesDao, activosDao, events, transaccion, topeCercaPct) {

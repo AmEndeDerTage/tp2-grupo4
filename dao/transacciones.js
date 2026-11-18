@@ -22,7 +22,7 @@ function transaccionEnMemoria(trabajo) {
  * Sequelize (SQLite): transacción administrada de tipo IMMEDIATE, que espera su turno en una cola del proceso.
  *  - Administrada: si `trabajo` termina bien, Sequelize hace commit; si lanza (p. ej. el AppError de una regla), rollback.
  *  - IMMEDIATE: toma el lock de escritura de SQLite al empezar y no en la primera escritura. Así dos pedidos no pueden
- *    leer lo mismo y escribir los dos (la carrera A1): el segundo espera a que el primero confirme y lee lo nuevo.
+ *    leer lo mismo y escribir los dos (la condición de carrera): el segundo espera a que el primero confirme y lee lo nuevo.
  *  - Cola: el driver sqlite3 espera el lock DENTRO de los hilos de libuv (4 por defecto). Con varias transacciones
  *    esperando a la vez se ocupan todos y la que tiene el lock no consigue hilo para terminar. Probado: 20 pedidos
  *    simultáneos daban 16 errores 500 en 23 s; con la cola, 20 × 201 en 0,3 s. SQLite admite un solo escritor por vez,

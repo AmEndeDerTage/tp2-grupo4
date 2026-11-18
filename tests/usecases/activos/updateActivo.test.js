@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { crearEscenario, estado, unActivo, unaOrden } from "../../helpers/escenario.js";
 import EVENTS from "../../../events/eventNames.js";
 
-// updateActivo: regla 2 y las reglas 5 y 6 vistas desde el activo (D3), más el aviso de tope al editar (D6).
+// updateActivo: regla 2, las reglas 4, 5 y 6 vistas desde el activo, y el aviso de tope al editar.
 
 describe("regla 2 al editar — el ticker no puede ser el de otro activo", () => {
   const escenario = () => crearEscenario({ activos: [unActivo({ id: 1, ticker: "KO" }), unActivo({ id: 2, ticker: "AAPL" })] });
@@ -28,7 +28,7 @@ describe("regla 2 al editar — el ticker no puede ser el de otro activo", () =>
   });
 });
 
-describe("reglas 5 y 6 desde el activo (D3) — lo comprometido en órdenes vivas tiene que seguir entrando", () => {
+describe("reglas 5 y 6 desde el activo — lo comprometido en órdenes vivas tiene que seguir entrando", () => {
   // 40 en cartera y tope 100; una venta viva de 10 y una compra viva de 20
   const escenario = () =>
     crearEscenario({
@@ -90,7 +90,7 @@ describe("regla 4 desde el activo — con compras vivas, el nivel nuevo tiene qu
   });
 });
 
-describe("activo.topeCerca al editar (D6) — con el umbral inyectado", () => {
+describe("activo.topeCerca al editar — con el umbral inyectado", () => {
   // AAPL: 10 en cartera y 20 en compras vivas = 30 comprometidos
   const escenario = (topeCercaPct) =>
     crearEscenario({

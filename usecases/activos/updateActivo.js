@@ -18,7 +18,7 @@ import { verificarCompromisos, verificarNivelConCompras, evaluarTopeCerca } from
  * medio podría quedar fuera de la cuenta.
  *
  * Evento: si el cambio toca `cantidad` o `topeCedears` y lo comprometido (cartera + compras vivas) queda en
- * `topeCercaPct` % o más del tope, emite activo.topeCerca, el mismo aviso que una compra (D6). Se llega al tope por
+ * `topeCercaPct` % o más del tope, emite activo.topeCerca, el mismo aviso que una compra. Se llega al tope por
  * cualquiera de las dos puertas, y el aviso dice «el activo está cerca del tope», no «una compra lo acercó».
  * Cambiar solo el nivel, el nombre o el ticker no vuelve a avisar. Se emite después del commit.
  * El umbral `topeCercaPct` llega inyectado desde el container (clase 13), como en createOrden y updateOrden.

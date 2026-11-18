@@ -72,7 +72,7 @@ describe("regla 6 desde el activo — no nace con más cartera que tope", () => 
   });
 });
 
-describe("todo o nada (D13) — todas las etiquetas tienen que existir", () => {
+describe("todo o nada — todas las etiquetas tienen que existir", () => {
   it("con dos etiquetas inexistentes → 404 ETIQUETA_NO_ENCONTRADA que informa las dos, y no queda nada", async () => {
     const esc = escenario();
     const antes = await estado(esc);
@@ -95,7 +95,7 @@ describe("todo o nada (D13) — todas las etiquetas tienen que existir", () => {
     await expect(esc.activos.createActivo(alta())).resolves.toMatchObject({ id: 2 });
   });
 
-  it("segunda barrera (C8): si la regla se salteara, el DAO en memoria tampoco escribe nada, como la clave foránea de la base", async () => {
+  it("segunda barrera: si la regla se salteara, el DAO en memoria tampoco escribe nada, como la clave foránea de la base", async () => {
     const esc = escenario();
     const antes = await estado(esc);
 
