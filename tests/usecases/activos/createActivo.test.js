@@ -46,6 +46,32 @@ describe("regla 2 — el ticker es único", () => {
   });
 });
 
+describe("regla 6 desde el activo — no nace con más cartera que tope", () => {
+  it("feliz: con cartera por debajo del tope se crea", async () => {
+    const esc = escenario();
+    await expect(esc.activos.createActivo(alta({ cantidad: 5, topeCedears: 20 }))).resolves.toMatchObject({ cantidad: 5, topeCedears: 20 });
+  });
+
+  it("borde: puede nacer con la cartera exactamente en el tope", async () => {
+    const esc = escenario();
+    await expect(esc.activos.createActivo(alta({ cantidad: 20, topeCedears: 20 }))).resolves.toMatchObject({ cantidad: 20 });
+  });
+
+  it("la viola: 21 en cartera con tope 20 → 409 TOPE_EXCEDIDO y el estado no cambió", async () => {
+    const esc = escenario();
+    const antes = await estado(esc);
+
+    await expect(esc.activos.createActivo(alta({ cantidad: 21, topeCedears: 20 }))).rejects.toMatchObject({ code: "TOPE_EXCEDIDO", statusCode: 409 });
+    expect(await estado(esc)).toEqual(antes);
+    expect(esc.events.emit).not.toHaveBeenCalled();
+  });
+
+  it("se mira después del ticker: con ticker repetido y cartera sobre el tope, responde TICKER_DUPLICADO", async () => {
+    const esc = escenario();
+    await expect(esc.activos.createActivo(alta({ ticker: "KO", cantidad: 21, topeCedears: 20 }))).rejects.toMatchObject({ code: "TICKER_DUPLICADO" });
+  });
+});
+
 describe("todo o nada (D13) — todas las etiquetas tienen que existir", () => {
   it("con dos etiquetas inexistentes → 404 ETIQUETA_NO_ENCONTRADA que informa las dos, y no queda nada", async () => {
     const esc = escenario();

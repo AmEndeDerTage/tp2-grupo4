@@ -2,7 +2,7 @@ import AppError from "../../errors/AppError.js";
 
 /**
  * Reglas de negocio de Órdenes, escritas UNA sola vez y reutilizadas por los casos de uso
- * (createOrden, updateOrden y ejecutarOrden; verificarCompromisos también la usa updateActivo). Cada función verifica una regla y,
+ * (createOrden, updateOrden y ejecutarOrden; verificarCompromisos la usan createActivo y updateActivo). Cada función verifica una regla y,
  * si no se cumple, lanza un AppError con su código; si se cumple, no hace nada (o devuelve lo que buscó).
  * No conocen HTTP ni ninguna implementación concreta de DAO: reciben los DAOs por parámetro.
  * Las que leen datos reciben además el `tx` de la transacción del caso de uso, para leer dentro de ella.
@@ -110,12 +110,13 @@ function evaluarTopeCerca(activo, vivasDelMismoLado, cantidad, umbralPct) {
 }
 
 /**
- * Reglas 5 y 6 vistas desde el activo (PUT /activos/:id que toca `cantidad` o `topeCedears`): lo ya comprometido
- * en órdenes vivas tiene que seguir entrando con los valores nuevos del activo.
+ * Reglas 5 y 6 vistas desde el activo (POST /activos, y PUT /activos/:id que toca `cantidad` o `topeCedears`):
+ * lo ya comprometido en órdenes vivas tiene que seguir entrando con los valores del activo.
  *  - venta (regla 5): cartera ≥ Σ ventas vivas                    (CANTIDAD_INSUFICIENTE, 409)
  *  - compra (regla 6): cartera + Σ compras vivas ≤ topeCedears     (TOPE_EXCEDIDO, 409)
  * Son invariantes: si el activo pudiera romperlas, existirían órdenes vivas que las reglas dicen que no pueden existir.
  * `activo` llega ya con los cambios aplicados; `vivas`, todas las órdenes vivas del activo (de los dos sentidos).
+ * En el alta no hay órdenes vivas (lista vacía) y la regla queda en: la cartera inicial no supera el tope.
  */
 function verificarCompromisos(activo, vivas) {
   const suma = (sentido) => vivas.filter((o) => o.sentido === sentido).reduce((total, o) => total + o.cantidad, 0);

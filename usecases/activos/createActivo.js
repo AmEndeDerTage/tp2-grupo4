@@ -1,11 +1,14 @@
 import AppError from "../../errors/AppError.js";
+import { verificarCompromisos } from "../ordenes/reglasOrden.js";
 
 /**
  * Caso de uso: dar de alta un activo, opcionalmente con sus etiquetas (`etiquetaIds`).
  * Es la operación atómica de la relación N:N: escribe en dos tablas (el activo y sus vínculos en activo_etiquetas)
  * y tiene que quedar entera o no quedar, como lend() en el ejemplo de la materia (préstamo + stock).
- * Reglas, de la más barata a la más cara (fail fast):
+ * Reglas, en este orden (el mismo que updateActivo):
  *   2. el ticker es único                                        → TICKER_DUPLICADO (409)
+ *   6. el activo no nace con más CEDEARs en cartera que su tope
+ *      (la misma función que usa updateActivo: verificarCompromisos) → TOPE_EXCEDIDO (409)
  *   -  todas las etiquetas tienen que existir (se informan todas
  *      las que faltan en `details`, no solo la primera)          → ETIQUETA_NO_ENCONTRADA (404)
  * Verificar y escribir van en una transacción: si algo falla después del INSERT del activo (p. ej. el de los vínculos),
@@ -18,6 +21,9 @@ async function createActivo(data, activosDao, etiquetasDao, transaccion) {
     if (existente) {
       throw new AppError("TICKER_DUPLICADO", `Ya existe un activo con el ticker ${data.ticker}`, 409);
     }
+
+    // Un activo nuevo todavía no tiene órdenes vivas: lo único comprometido es su propia cartera
+    verificarCompromisos(data, []);
 
     const faltantes = [];
     for (const etiquetaId of data.etiquetaIds ?? []) {
