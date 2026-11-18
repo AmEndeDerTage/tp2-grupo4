@@ -157,7 +157,7 @@ paths:
                   summary: Con etiquetaIds [1, 3]
                   value: { id: 4, ticker: PG, nombre: Procter & Gamble, mercado: NYSE, ratio: 15, nivel: L1, cantidad: 0, topeCedears: 20, etiquetas: [{ id: 1, nombre: dividendos }, { id: 3, nombre: defensivo }] }
         "400":
-          $ref: "#/components/responses/ErrorValidacion"
+          $ref: "#/components/responses/ErrorEntrada"
         "404":
           description: Alguna de las etiquetas no existe; el activo no se creó
           content:
@@ -231,7 +231,7 @@ paths:
                 $ref: "#/components/schemas/Activo"
               example: { id: 3, ticker: GGAL, nombre: Grupo Financiero Galicia, mercado: BYMA, ratio: 1, nivel: L2, cantidad: 0, topeCedears: 50, etiquetas: [{ id: 4, nombre: argentina }] }
         "400":
-          $ref: "#/components/responses/ErrorValidacion"
+          $ref: "#/components/responses/ErrorEntrada"
         "404":
           $ref: "#/components/responses/ActivoNoEncontrado"
         "409":
@@ -411,6 +411,7 @@ paths:
           schema:
             type: integer
             minimum: 1
+            example: 1
         - $ref: "#/components/parameters/OrdenSort"
         - $ref: "#/components/parameters/Page"
         - $ref: "#/components/parameters/Limit"
@@ -480,7 +481,7 @@ paths:
                 $ref: "#/components/schemas/Orden"
               example: { id: 4, activoId: 2, sentido: compra, cantidad: 5, precioLimite: 12, validaHasta: "2026-12-15", estado: viva, motivo: Segunda tanda de compra, activo: { id: 2, ticker: AAPL } }
         "400":
-          $ref: "#/components/responses/ErrorValidacion"
+          $ref: "#/components/responses/ErrorEntrada"
         "404":
           $ref: "#/components/responses/ActivoNoEncontrado"
         "409":
@@ -554,7 +555,7 @@ paths:
                 $ref: "#/components/schemas/Orden"
               example: { id: 1, activoId: 1, sentido: venta, cantidad: 10, precioLimite: 71, validaHasta: "2026-11-30", estado: viva, motivo: Toma parcial de ganancia, activo: { id: 1, ticker: KO } }
         "400":
-          $ref: "#/components/responses/ErrorValidacion"
+          $ref: "#/components/responses/ErrorEntrada"
         "404":
           $ref: "#/components/responses/OrdenNoEncontrada"
         "409":
@@ -687,7 +688,7 @@ paths:
                 $ref: "#/components/schemas/Etiqueta"
               example: { id: 6, nombre: renta-fija }
         "400":
-          $ref: "#/components/responses/ErrorValidacion"
+          $ref: "#/components/responses/ErrorEntrada"
         "409":
           $ref: "#/components/responses/EtiquetaDuplicada"
 
@@ -731,7 +732,7 @@ paths:
                 $ref: "#/components/schemas/Etiqueta"
               example: { id: 6, nombre: bonos }
         "400":
-          $ref: "#/components/responses/ErrorValidacion"
+          $ref: "#/components/responses/ErrorEntrada"
         "404":
           $ref: "#/components/responses/EtiquetaNoEncontrada"
         "409":
@@ -856,6 +857,28 @@ components:
               details:
                 - { field: ticker, message: "El ticker debe tener entre 1 y 10 caracteres: letras mayúsculas, dígitos o punto, empezando con letra" }
                 - { field: ratio, message: El ratio debe ser mayor a 0 }
+    ErrorEntrada:
+      description: |
+        Cuerpo inválido. Dos causas, con el mismo formato de error: datos que no cumplen el schema
+        (`VALIDATION_ERROR`, con `details` por campo) o un cuerpo que no es JSON (`INVALID_JSON`, lo detecta
+        `express.json()` antes de llegar a Zod).
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          examples:
+            validacion:
+              summary: Un campo no cumple el schema
+              value:
+                error:
+                  code: VALIDATION_ERROR
+                  message: Datos de body inválidos
+                  details:
+                    - { field: cantidad, message: La cantidad debe ser mayor a 0 }
+            jsonInvalido:
+              summary: El cuerpo no es JSON
+              value:
+                error: { code: INVALID_JSON, message: El cuerpo de la petición no es un JSON válido }
     ActivoNoEncontrado:
       description: No existe un activo con ese id
       content:
