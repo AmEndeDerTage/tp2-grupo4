@@ -103,3 +103,60 @@ Viven en los casos de uso (`usecases/`) y responden con un código propio en el 
 | 8 | No se borra un activo con órdenes (vivas o ejecutadas: el historial no queda huérfano) | `ACTIVO_CON_ORDENES` | 409 |
 
 Las reglas 5 y 6 también se verifican al editar la `cantidad` o el `topeCedears` de un activo. La relación N:N suma las suyas: nombre de etiqueta único (`ETIQUETA_DUPLICADA` 409), la etiqueta tiene que existir (`ETIQUETA_NO_ENCONTRADA` 404), no se asigna dos veces (`ETIQUETA_YA_ASIGNADA` 409) y solo se quita una que el activo tiene (`ETIQUETA_NO_ASIGNADA` 404). Borrar una etiqueta en uso la saca de todos los activos.
+
+## Instalación y ejecución
+
+**Requisitos:** Node.js 20.17 o posterior (por `node --env-file` y `sqlite3` 6) y npm.
+
+```bash
+git clone https://github.com/AmEndeDerTage/tp2-grupo4.git
+cd tp2-grupo4
+npm install
+cp .env.example .env          # en PowerShell: Copy-Item .env.example .env
+npm start                     # o npm run dev, que reinicia solo al guardar un archivo
+```
+
+La API queda en `http://localhost:8000`. Al arrancar, la consola informa qué persistencia y qué notificadores están activos.
+
+> **npm 12:** no corre los scripts de instalación de las dependencias salvo que estén autorizados. `sqlite3` necesita el suyo para bajar su binario, así que `package.json` lo autoriza en `allowScripts` (y deja afuera la telemetría de `@scarf/scarf`). Con `npm install` alcanza; si se actualiza `sqlite3` de versión hay que volver a autorizarlo: `npm install-scripts approve sqlite3`.
+
+### Variables de entorno
+
+Se leen del archivo `.env` (con `node --env-file=.env`, sin `dotenv`). `config/config.js` es el único módulo que las lee, y corta el arranque con un mensaje claro si una tiene un valor inválido.
+
+| Variable | Valores | Por defecto | Para qué |
+|---|---|---|---|
+| `PORT` | número | `8000` | Puerto del servidor |
+| `NODE_ENV` | texto | `development` | Entorno |
+| `PERSISTENCE_TYPE` | `memory` · `sequelize` | `memory` | Dónde se guardan los datos |
+| `NOTIFIER_TYPE` | `console` · `file` | `console` | Canal de los avisos `orden.creada` y `orden.ejecutada` |
+| `NOTIFICATIONS_LOG_PATH` | ruta | `notifications.log` | Archivo de los avisos que salen por archivo |
+| `TOPE_CERCA_PCT` | número entre 0 (excluido) y 100 | `90` | Desde qué porcentaje del tope avisa `activo.topeCerca` |
+
+## Cómo cambiar de persistencia
+
+Cambiar `PERSISTENCE_TYPE` en `.env` y reiniciar el servidor:
+
+- `memory`: los datos viven en arrays del proceso; cada arranque vuelve a la semilla.
+- `sequelize`: SQLite en el archivo `database.sqlite` de la raíz, que se crea solo con la semilla. Para volver a la semilla, parar el servidor y borrar el archivo.
+
+Para probar el otro modo sin tocar `.env`, la variable del entorno tiene prioridad sobre el archivo:
+
+```powershell
+$env:PERSISTENCE_TYPE="sequelize"; npm start      # PowerShell
+Remove-Item Env:PERSISTENCE_TYPE                   # para volver a lo que diga .env
+```
+
+```bash
+PERSISTENCE_TYPE=sequelize npm start               # bash
+```
+
+Los dos modos responden igual ante los mismos pedidos (misma forma y mismos códigos). La elección la hace una sola factory (`dao/daoFactory.js`), que entrega los DAO de memoria o los de Sequelize con la misma interfaz, y también la forma de transacción correspondiente. El resto de la aplicación no se entera.
+
+> El modelo de la base se crea con `sync()` (sin migraciones): si se cambia un modelo, hay que borrar `database.sqlite` para que se vuelva a crear.
+
+## Documentación de la API
+
+Con el servidor andando: **[`http://localhost:8000/api-docs`](http://localhost:8000/api-docs)**.
+
+Es Swagger UI sobre la especificación OpenAPI 3 de `docs/openapi.yaml`, servida con `swagger-ui-express`. Cada endpoint tiene sus parámetros, cuerpos con ejemplos y todas sus respuestas posibles (200 · 201 · 204 · 400 · 404 · 409 · 500). Los schemas de las entidades y del error se definen una vez en `components/schemas` y se reutilizan con `$ref`. «Try it out» funciona contra el servidor en los dos modos de persistencia. El listado de endpoints vive ahí y no se repite en este README.
