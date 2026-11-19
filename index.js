@@ -4,7 +4,7 @@ import cabeceras from "./middlewares/cabeceras.js";
 import { generalLimiter } from "./middlewares/rateLimit.js";
 import notFound from "./middlewares/notFound.js";
 import errorHandler from "./middlewares/errorHandler.js";
-import { PORT, PERSISTENCE_TYPE } from "./config/config.js";
+import { PORT, HOST, PERSISTENCE_TYPE } from "./config/config.js";
 import buildContainer from "./container/container.js";
 
 // Punto de entrada: arma la app de Express, le monta el router que entrega el container y empieza a escuchar.
@@ -32,8 +32,9 @@ async function startServer() {
   app.use(notFound);
   app.use(errorHandler);
 
-  app.listen(PORT, () => {
-    console.log(`API de Activos y Órdenes en http://localhost:${PORT} · persistencia: ${PERSISTENCE_TYPE}`);
+  // HOST decide quién llega: con 127.0.0.1 (el valor por defecto) solo esta máquina; con 0.0.0.0, también la red
+  app.listen(PORT, HOST, () => {
+    console.log(`API de Activos y Órdenes en http://localhost:${PORT} · escucha en ${HOST} · persistencia: ${PERSISTENCE_TYPE}`);
   });
 }
 
