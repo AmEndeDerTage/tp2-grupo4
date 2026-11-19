@@ -18,7 +18,7 @@ if (!PERSISTENCE_TYPES.includes(PERSISTENCE_TYPE)) {
 }
 
 // Eventos (clase 10)
-// Por dónde sale el aviso de orden.creada: "console" (default) o "file" (se agrega a NOTIFICATIONS_LOG_PATH)
+// Por dónde salen los avisos de orden.creada y orden.ejecutada: "console" (default) o "file" (se agregan a NOTIFICATIONS_LOG_PATH)
 const NOTIFIER_TYPE = process.env.NOTIFIER_TYPE || "console";
 // Archivo de fileNotifier. Apuntarlo a una ruta imposible es la forma de probar que un notificador roto no tumba el POST
 const NOTIFICATIONS_LOG_PATH = process.env.NOTIFICATIONS_LOG_PATH || "notifications.log";

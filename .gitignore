@@ -149,4 +149,4 @@ vite.config.ts.timestamp-*
 .turbo
 
 *.sqlite
-!.env.example
+*.sqlite-journal

@@ -6,7 +6,7 @@
 const EVENTS = {
   // createOrden, después de guardar: hay una orden nueva para colocar a mano en el broker
   ORDEN_CREADA: "orden.creada",
-  // Una compra dejó lo comprometido del activo (cartera + compras vivas) en TOPE_CERCA_PCT % o más de su tope
+  // Una compra, o una edición del activo, dejó lo comprometido (cartera + compras vivas) en TOPE_CERCA_PCT % o más del tope
   ACTIVO_TOPE_CERCA: "activo.topeCerca",
   // ejecutarOrden, después del commit: la orden se llenó en el broker y la cartera del activo ya se movió
   ORDEN_EJECUTADA: "orden.ejecutada",

@@ -1,7 +1,7 @@
 {
   "name": "tp2-grupo4",
   "version": "1.0.0",
-  "description": "TP - TP2 - Grupo4",
+  "description": "API REST en capas de Activos y Órdenes (CEDEARs) — TP Integrador de Taller de Programación 2, ORT Argentina",
   "main": "index.js",
   "scripts": {
     "test": "vitest run",
@@ -12,7 +12,18 @@
     "type": "git",
     "url": "git+https://github.com/AmEndeDerTage/tp2-grupo4.git"
   },
-  "keywords": [],
+  "keywords": [
+    "express",
+    "rest-api",
+    "zod",
+    "dao",
+    "sequelize",
+    "sqlite",
+    "openapi",
+    "eventemitter",
+    "vitest"
+  ],
+  "author": "Tomas Jose Martinez",
   "type": "module",
   "bugs": {
     "url": "https://github.com/AmEndeDerTage/tp2-grupo4/issues"
