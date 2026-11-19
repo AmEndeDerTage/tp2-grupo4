@@ -43,6 +43,7 @@ class OrdenesSequelizeDao {
     return { items: rows.map((o) => o.get({ plain: true })), total: count };
   }
 
+  // Una orden por id, con el resumen de su activo ({ id, ticker }), o null si no existe
   async getById(id, tx) {
     const orden = await OrdenModel.findByPk(id, { attributes: ATRIBUTOS, include: INCLUDE, transaction: tx });
     return orden ? orden.get({ plain: true }) : null;
@@ -70,14 +71,14 @@ class OrdenesSequelizeDao {
   }
 
   /**
-   * Ejecuta una orden viva en UNA transacción, con dos UPDATE condicionales (el patrón lend() del profesor):
+   * Ejecuta una orden viva en UNA transacción, con dos UPDATE condicionales (cada uno escribe solo si se cumple su WHERE):
    *  1. la orden pasa a "ejecutada" solo si sigue "viva" (WHERE estado = 'viva');
    *  2. la cartera del activo se mueve (+ en compra, − en venta) solo si no queda negativa
    *     (WHERE cantidad >= lo que se vende), junto con `cambiosActivo` (p. ej. { nivel: "L3" }).
    * Devuelve la orden ejecutada, o null si no existe o no estaba viva.
    * Si el 1 no encuentra fila, todavía no cambió nada: devuelve null. Si el 2 no encuentra fila, el 1 YA se escribió:
    * se LANZA un error para que la transacción haga rollback y la orden vuelva a "viva" (devolver null confirmaría el 1).
-   * Usa la transacción del caso de uso (`tx`); si no recibe ninguna, abre la suya, como lend().
+   * Usa la transacción del caso de uso (`tx`); si no recibe ninguna, abre la suya.
    */
   async ejecutar(id, cambiosActivo = {}, tx) {
     const trabajo = async (t) => {

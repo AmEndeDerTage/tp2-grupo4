@@ -18,7 +18,7 @@ ActivoModel.hasMany(OrdenModel, { foreignKey: "activoId", as: "ordenes", onDelet
 OrdenModel.belongsTo(ActivoModel, { foreignKey: "activoId", as: "activo", onDelete: "RESTRICT" });
 
 // Relación N:N: un activo tiene muchas etiquetas y una etiqueta está en muchos activos, a través de la tabla
-// intermedia activo_etiquetas (como Users–Books a través de Loans en el ejemplo de la materia).
+// intermedia activo_etiquetas (su modelo es ActivoEtiquetaModel).
 // Se declara en los dos sentidos porque cada uno habilita las consultas y los métodos desde su lado:
 //   - desde el activo (as: "etiquetas"): include de sus etiquetas, activo.getEtiquetas(), activo.hasEtiqueta()
 //   - desde la etiqueta (as: "activos"): etiqueta.getActivos(), que usa el filtro GET /activos?etiqueta=

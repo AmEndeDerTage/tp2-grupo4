@@ -41,6 +41,7 @@ class EtiquetasMemoryDao {
     return { items: resultado.map((e) => ({ ...e })), total };
   }
 
+  // Una etiqueta por id ({ id, nombre }), o null si no existe
   async getById(id, _tx) {
     const etiqueta = this.#etiquetas.find((e) => e.id === Number(id));
     return etiqueta ? { ...etiqueta } : null;

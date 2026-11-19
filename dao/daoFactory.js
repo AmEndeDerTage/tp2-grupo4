@@ -14,6 +14,7 @@ import { transaccionEnMemoria, transaccionSequelize } from "./transacciones.js";
  *
  * config.js ya rechaza cualquier valor que no sea "memory" | "sequelize".
  */
+// El DAO de Activos del modo elegido (imprime cuál al arrancar, para que se vea en la consola)
 function getActivosDao() {
   if (PERSISTENCE_TYPE === "sequelize") {
     console.log("[Persistencia] Activos: Sequelize (SQLite)");
@@ -23,6 +24,7 @@ function getActivosDao() {
   return activosMemoryDao;
 }
 
+// El DAO de Órdenes del modo elegido
 function getOrdenesDao() {
   if (PERSISTENCE_TYPE === "sequelize") {
     console.log("[Persistencia] Órdenes: Sequelize (SQLite)");
@@ -32,6 +34,7 @@ function getOrdenesDao() {
   return ordenesMemoryDao;
 }
 
+// El DAO de Etiquetas del modo elegido
 function getEtiquetasDao() {
   if (PERSISTENCE_TYPE === "sequelize") {
     console.log("[Persistencia] Etiquetas: Sequelize (SQLite)");

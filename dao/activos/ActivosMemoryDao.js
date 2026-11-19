@@ -77,6 +77,7 @@ class ActivosMemoryDao {
     return { items, total };
   }
 
+  // Un activo por id, con sus etiquetas anidadas, o null si no existe
   async getById(id, _tx) {
     const activo = this.#activos.find((a) => a.id === Number(id));
     return activo ? this.#conEtiquetas(activo) : null;
@@ -122,7 +123,7 @@ class ActivosMemoryDao {
 
   /**
    * Mueve la cartera: suma `delta` a la cantidad (negativo = resta) y aplica `cambios` extra (p. ej. { nivel: "L3" }).
-   * Condicional, como adjustStock del profesor: si el activo no existe o la cantidad quedaría negativa, no toca nada
+   * Es condicional: si el activo no existe o la cantidad quedaría negativa, no toca nada
    * y devuelve null. Entre la comprobación y la modificación no hay ningún await: ningún otro pedido puede meterse
    * en el medio, así que comprobar-y-modificar es atómico sin transacción. La usa OrdenesMemoryDao.ejecutar.
    */

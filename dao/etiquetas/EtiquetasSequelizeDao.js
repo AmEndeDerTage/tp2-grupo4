@@ -27,6 +27,7 @@ class EtiquetasSequelizeDao {
     return { items: rows.map((e) => e.get({ plain: true })), total: count };
   }
 
+  // Una etiqueta por id ({ id, nombre }), o null si no existe
   async getById(id, tx) {
     const etiqueta = await EtiquetaModel.findByPk(id, { attributes: ATRIBUTOS, transaction: tx });
     return etiqueta ? etiqueta.get({ plain: true }) : null;

@@ -29,8 +29,10 @@ function transaccionEnMemoria(trabajo) {
  *    así que la cola no le quita nada. Vale para un proceso; con otra base (p. ej. Postgres) esta función se reemplaza
  *    por SELECT … FOR UPDATE o aislamiento SERIALIZABLE, sin tocar los casos de uso.
  */
+// La cola: una promesa que representa «lo último que se encoló». Cada trabajo nuevo se engancha detrás.
 let cola = Promise.resolve();
 
+// Encola el trabajo y lo corre en una transacción IMMEDIATE cuando le llega el turno; devuelve su resultado (o su error)
 function transaccionSequelize(trabajo) {
   const turno = cola.then(() => sequelize.transaction({ type: Transaction.TYPES.IMMEDIATE }, (t) => trabajo(t)));
   // Un trabajo que falla no traba la cola: el error le llega a quien lo pidió por `turno`, no al siguiente

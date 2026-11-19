@@ -63,6 +63,7 @@ class OrdenesMemoryDao {
     return { items, total };
   }
 
+  // Una orden por id, con el resumen de su activo ({ id, ticker }), o null si no existe
   async getById(id, _tx) {
     const orden = this.#ordenes.find((o) => o.id === Number(id));
     return orden ? this.#withRelations(orden) : null;

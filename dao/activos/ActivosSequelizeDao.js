@@ -29,7 +29,7 @@ class ActivosSequelizeDao {
    * extremos de cada relación, después lo que los une. Sembrar tabla por tabla «si está vacía» revivía datos borrados
    * a propósito (p. ej. todas las etiquetas) y, si además faltaba un activo de la semilla, el arranque fallaba.
    *
-   * sync() simple y NO sync({ alter: true }) como en el ejemplo de la materia: en SQLite, `alter` reconstruye cada
+   * sync() simple y NO sync({ alter: true }): en SQLite, `alter` reconstruye cada
    * tabla borrándola, y al borrar `activos` la clave foránea actúa sobre `ordenes`. Probado: con CASCADE el segundo
    * arranque pierde todas las órdenes y con RESTRICT el servidor no arranca; además se pierde el AUTOINCREMENT.
    * Costo: si cambia un modelo hay que borrar database.sqlite (son datos de prueba). En producción: migraciones.
@@ -86,6 +86,7 @@ class ActivosSequelizeDao {
     return { items: rows.map((a) => a.get({ plain: true })), total: count };
   }
 
+  // Un activo por id, con sus etiquetas anidadas (ordenadas por id), o null si no existe
   async getById(id, tx) {
     const activo = await ActivoModel.findByPk(id, { attributes: ATRIBUTOS, include: INCLUDE, order: [ORDEN_ETIQUETAS], transaction: tx });
     return activo ? activo.get({ plain: true }) : null;
