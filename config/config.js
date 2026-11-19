@@ -33,4 +33,8 @@ if (!(TOPE_CERCA_PCT > 0 && TOPE_CERCA_PCT <= 100)) {
   throw new Error(`TOPE_CERCA_PCT inválido: "${process.env.TOPE_CERCA_PCT}". Tiene que ser un número mayor que 0 y hasta 100`);
 }
 
-export { PORT, NODE_ENV, PERSISTENCE_TYPE, NOTIFIER_TYPE, NOTIFICATIONS_LOG_PATH, TOPE_CERCA_PCT };
+// Reloj. Vacío = la hora real. Con una fecha ISO (2026-12-01T12:00:00-03:00) el reloj queda fijo en ese
+// instante: sirve para probar a mano las reglas que miran la fecha. Que sea una fecha válida lo verifica utils/clock.js.
+const CLOCK_NOW = process.env.CLOCK_NOW || undefined;
+
+export { PORT, NODE_ENV, PERSISTENCE_TYPE, NOTIFIER_TYPE, NOTIFICATIONS_LOG_PATH, TOPE_CERCA_PCT, CLOCK_NOW };
