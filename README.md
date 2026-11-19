@@ -117,7 +117,9 @@ cp .env.example .env          # en PowerShell: Copy-Item .env.example .env
 npm start                     # o npm run dev, que reinicia solo al guardar un archivo
 ```
 
-La API queda en `http://localhost:8000`. Al arrancar, la consola informa qué persistencia y qué notificadores están activos.
+La API queda en `http://localhost:8000`, y por defecto escucha solo en esta máquina (`HOST=127.0.0.1`). Al arrancar, la consola informa qué persistencia y qué notificadores están activos.
+
+Leer es público. **Para escribir hay que iniciar sesión**: con el `.env` de ejemplo, usuario `operador` y contraseña `mellon-1234` (ver [Seguridad](#seguridad)).
 
 > **npm 12:** no corre los scripts de instalación de las dependencias salvo que estén autorizados. `sqlite3` necesita el suyo para bajar su binario, así que `package.json` lo autoriza en `allowScripts` (y deja afuera la telemetría de `@scarf/scarf`). Con `npm install` alcanza; si se actualiza `sqlite3` de versión hay que volver a autorizarlo: `npm install-scripts approve sqlite3`.
 
@@ -128,12 +130,19 @@ Se leen del archivo `.env` (con `node --env-file=.env`, sin `dotenv`). `config/c
 | Variable | Valores | Por defecto | Para qué |
 |---|---|---|---|
 | `PORT` | número | `8000` | Puerto del servidor |
-| `NODE_ENV` | texto | `development` | Entorno |
+| `HOST` | dirección | `127.0.0.1` | En qué dirección escucha: `127.0.0.1` es solo esta máquina; `0.0.0.0` la abre a la red |
+| `NODE_ENV` | `development` · `production` | `development` | En `production` no se publica la documentación (`/api-docs`) |
 | `PERSISTENCE_TYPE` | `memory` · `sequelize` | `memory` | Dónde se guardan los datos |
 | `NOTIFIER_TYPE` | `console` · `file` | `console` | Canal de los avisos `orden.creada` y `orden.ejecutada` |
 | `NOTIFICATIONS_LOG_PATH` | ruta | `notifications.log` | Archivo de los avisos que salen por archivo |
 | `TOPE_CERCA_PCT` | número entre 0 (excluido) y 100 | `90` | Desde qué porcentaje del tope avisa `activo.topeCerca` |
 | `CLOCK_NOW` | vacío o fecha ISO (`2026-12-01T12:00:00-03:00`) | vacío | Reloj de la regla 9: vacío es la hora real; con una fecha queda fijo, para probarla |
+| `RATE_LIMIT_MAX` | entero ≥ 0 | `1000` | Pedidos por IP y por minuto a toda la API (0 = sin límite) |
+| `LOGIN_RATE_LIMIT_MAX` | entero ≥ 0 | `5` | Inicios de sesión fallidos por IP y por minuto (0 = sin límite) |
+| `JWT_SECRET` | texto de 32 caracteres o más | **sin valor por defecto** | Secreto que firma los tokens. Si falta, la aplicación no arranca |
+| `JWT_EXPIRES_IN` | `15m` · `1h` · `7d`… | `1h` | Cuánto vale cada token |
+| `OPERADOR_USUARIO` | texto | `operador` | Usuario del único operador |
+| `OPERADOR_PASSWORD_HASH` | hash bcrypt | **sin valor por defecto** | Hash de su contraseña (nunca la contraseña). Se genera con `node scripts/hash.js "contraseña"` |
 
 ## Cómo cambiar de persistencia
 
@@ -157,11 +166,44 @@ Los dos modos responden igual ante los mismos pedidos (misma forma y mismos cód
 
 > El modelo de la base se crea con `sync()` (sin migraciones): si se cambia un modelo, hay que borrar `database.sqlite` para que se vuelva a crear.
 
+## Seguridad
+
+**Quién puede hacer qué.** Leer (`GET`) es público. Todo pedido que escribe (`POST`, `PUT`, `DELETE`) exige un **token JWT** en el header `Authorization: Bearer <token>`. La API tiene un solo usuario, el operador, definido por entorno.
+
+```bash
+# 1. iniciar sesión → { "token": "…", "tipo": "Bearer", "expiraEn": "1h" }
+curl -X POST http://localhost:8000/auth/login -H "Content-Type: application/json" -d '{"usuario":"operador","password":"mellon-1234"}'
+# 2. usar el token en los pedidos que escriben
+curl -X POST http://localhost:8000/etiquetas -H "Content-Type: application/json" -H "Authorization: Bearer <token>" -d '{"nombre":"renta-fija"}'
+```
+
+En Swagger UI: ejecutar `POST /auth/login`, copiar el `token` y pegarlo en el botón **Authorize**. En `requests.http`, el caso 0 inicia sesión y los demás usan su token.
+
+| Medida | Cómo | Dónde |
+|---|---|---|
+| Autenticación | Token JWT firmado (HS256, con el algoritmo fijado al verificar) y con vencimiento. Sin token, vencido o que este servidor no firmó → **401**. Usuario o contraseña incorrectos dan el mismo error y tardan lo mismo | `security/tokenService.js` · `middlewares/auth.js` · `usecases/auth/` |
+| Contraseña | En el `.env` va su **hash bcrypt**, nunca la contraseña. `JWT_SECRET` no tiene valor por defecto: sin él, la aplicación no arranca | `security/passwordHasher.js` · `config/config.js` · `scripts/hash.js` |
+| Límites de pedidos | Por IP y por minuto: 1.000 a toda la API y 5 inicios de sesión fallidos → **429** | `middlewares/rateLimit.js` |
+| Red | Escucha solo en `127.0.0.1`; abrirla a la red es una decisión explícita (`HOST=0.0.0.0`) | `index.js` |
+| Cabeceras | Sin `X-Powered-By`; `nosniff`, sin marcos de otras páginas, política de contenido restringida a este servidor | `middlewares/cabeceras.js` |
+| Entrada | Zod descarta todo campo no declarado; los textos libres tienen largo máximo y no admiten caracteres de control ni invisibles; los números de la URL son solo dígitos y los del cuerpo tienen tope; el cuerpo no pasa de 100 kb | `schemas/` |
+| Inyección SQL | Todas las consultas van parametrizadas (Sequelize) y el orden y los filtros se validan contra una lista: un texto con SQL se guarda como texto | `dao/` · `schemas/` |
+| Pedidos desde otra página (CSRF) | El token viaja en un header que otra página no puede agregar; no se usan cookies ni se habilita CORS | — |
+| Documentación | Con `NODE_ENV=production` no se publica `/api-docs` | `container/container.js` |
+| Dependencias | `npm audit` sin avisos. `package.json` fuerza `uuid` 11 debajo de Sequelize (`overrides`), que todavía declara una versión con un aviso | `package.json` |
+| Errores | El 500 no devuelve detalles internos: quedan en la consola del servidor | `middlewares/errorHandler.js` |
+
+**Pruebas de vulnerabilidad.** Un pedido que ya fue rechazado (4xx) y además tiene pinta de ataque (un token que este servidor no firmó, SQL o HTML inyectado, un archivo que no es de la API, un límite superado) conserva su status y su `code`; lo único que cambia es el `message`. El reconocimiento vive en `security/pruebaHostil.js` y no decide si un pedido se acepta: eso lo hacen la validación y las reglas.
+
+**Para cambiar la contraseña del operador:** `node scripts/hash.js "la nueva"` y pegar el resultado en `OPERADOR_PASSWORD_HASH`. **Para generar un secreto:** `node -e "console.log(require('node:crypto').randomBytes(48).toString('hex'))"`.
+
+**Límites conocidos.** Un token sigue valiendo hasta que vence aunque se cambie la contraseña (para invalidar todos, se cambia `JWT_SECRET`). Los límites de pedidos se cuentan en la memoria del proceso: reiniciar los pone en cero, y detrás de un proxy habría que configurar `trust proxy`. La API habla HTTP: en una red real iría detrás de HTTPS.
+
 ## Documentación de la API
 
 Con el servidor andando: **[`http://localhost:8000/api-docs`](http://localhost:8000/api-docs)**.
 
-Es Swagger UI sobre la especificación OpenAPI 3 de `docs/openapi.yaml`, servida con `swagger-ui-express`. Cada endpoint tiene sus parámetros, cuerpos con ejemplos y todas sus respuestas posibles (200 · 201 · 204 · 400 · 404 · 409 · 500, más 413 y 415 en los pedidos con cuerpo). Los schemas de las entidades y del error se definen una vez en `components/schemas` y se reutilizan con `$ref`. «Try it out» funciona contra el servidor en los dos modos de persistencia. El listado de endpoints vive ahí y no se repite en este README.
+Es Swagger UI sobre la especificación OpenAPI 3 de `docs/openapi.yaml`, servida con `swagger-ui-express`. Cada endpoint tiene sus parámetros, cuerpos con ejemplos y todas sus respuestas posibles (200 · 201 · 204 · 400 · 404 · 409 · 429 · 500, más 401 en los que escriben y 413 y 415 en los pedidos con cuerpo). Los schemas de las entidades y del error se definen una vez en `components/schemas` y se reutilizan con `$ref`. «Try it out» funciona contra el servidor en los dos modos de persistencia. El listado de endpoints vive ahí y no se repite en este README.
 
 **Postman u otras herramientas.** La misma especificación se publica cruda en `http://localhost:8000/api-docs/openapi.json`. En Postman, *Import → Link* con esa URL (o *Import → File* con `docs/openapi.yaml`) arma una colección con todos los pedidos, agrupados por entidad. La colección trae la variable `baseUrl` en `/`: hay que cambiarla por `http://localhost:8000`.
 
@@ -193,20 +235,20 @@ El aviso de tope además queda en `notifications.log`. Para ver que un notificad
 
 ## Pruebas
 
-**Tests de los casos de uso** (Vitest, con los DAO en memoria como doble: sin base ni red):
+**Tests automatizados** (Vitest, con los DAO en memoria como doble: sin base ni red):
 
 ```bash
 npm test
 ```
 
-Están en `tests/usecases/`, con la misma organización que `usecases/`, y cubren las reglas de negocio en sus casos feliz, de borde y de violación (verificando además que el estado no cambie y que no se emitan eventos), la ejecución con su vuelta atrás ante una falla, el alta atómica con etiquetas y los vínculos de la N:N. `tests/helpers/escenario.js` arma en cada test DAOs nuevos con sus propios datos, un bus espía y un reloj fijo.
+Están en `tests/usecases/`, con la misma organización que `usecases/`, y cubren las reglas de negocio en sus casos feliz, de borde y de violación (verificando además que el estado no cambie y que no se emitan eventos), la ejecución con su vuelta atrás ante una falla, el alta atómica con etiquetas y los vínculos de la N:N. `tests/helpers/escenario.js` arma en cada test DAOs nuevos con sus propios datos, un bus espía y un reloj fijo. Además, `tests/security/` prueba el servicio de tokens contra cada ataque conocido a un JWT y el reconocimiento de pruebas de vulnerabilidad, `tests/usecases/auth/` el inicio de sesión y `tests/schemas/` la validación de textos y números.
 
 **Pruebas manuales:** `requests.http` tiene los pedidos de punta a punta, cada uno con el resultado esperado en su título (`→ 409 TOPE_EXCEDIDO`). Se corre con la extensión **REST Client** de VS Code, en orden y con el servidor recién arrancado (en `sequelize`, después de borrar `database.sqlite`), en cualquiera de los dos modos.
 
 ## Arquitectura
 
 ```
-index.js            arranque: middlewares, container, notFound y errorHandler
+index.js            arranque: middlewares globales, container, notFound y errorHandler
 config/             variables de entorno (único lector de process.env)
 container/          Composition Root: DAO → casos de uso → controladores → routers
 routes/             mapea método + ruta → validación Zod → controlador
@@ -217,9 +259,11 @@ dao/                DAO en memoria y en Sequelize con la misma interfaz, factory
 connection/         conexión de Sequelize a SQLite
 events/  alerts/  notifications/   bus de eventos, listeners y notificadores
 utils/              reloj inyectable (la fecha de hoy es un dato externo)
-middlewares/  errors/              logger, validación, notFound, errorHandler y AppError
+middlewares/  errors/              logger, cabeceras, límites, autenticación, validación, notFound, errorHandler y AppError
+security/           hash de contraseñas, tokens JWT y reconocimiento de pruebas de vulnerabilidad
+scripts/            generar el hash de una contraseña
 docs/               openapi.yaml y el router de Swagger UI
-tests/              tests de casos de uso (Vitest)
+tests/              tests de casos de uso, de seguridad y de validación (Vitest)
 ```
 
 ## Requisitos opcionales implementados
@@ -228,3 +272,4 @@ tests/              tests de casos de uso (Vitest)
 - **Relación N:N con tabla intermedia** (Activo–Etiqueta) y **operaciones atómicas** en transacción: la ejecución de una orden (marca la orden y mueve la cartera juntas) y el alta de un activo con sus etiquetas (todo o nada).
 - **Segundo evento con un notificador adicional**: `activo.topeCerca` por archivo y consola (y un tercero, `orden.ejecutada`).
 - **Tests automatizados de los casos de uso** con DAO en memoria como doble.
+- **Seguridad**: contraseña con hash (bcrypt) y autenticación con JWT en los pedidos que escriben, más límites de pedidos, cabeceras y validación reforzada (ver [Seguridad](#seguridad)).
