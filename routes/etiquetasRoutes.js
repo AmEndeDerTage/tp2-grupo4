@@ -10,16 +10,17 @@ import {
 /**
  * Router de Etiquetas.
  * Solo mapea verbo + ruta → validación → método del controlador; nada de lógica acá.
+ * Recibe también authenticate: leer es público, y todo pedido que escribe exige el token antes de validar nada.
  * Las rutas van sin el prefijo /etiquetas: lo agrega el container al montar el router.
  */
-function createEtiquetasRouter(controller) {
+function createEtiquetasRouter(controller, { authenticate }) {
   const router = Router();
 
   router.get("/", validateQuery(queryEtiquetasSchema), controller.list);
   router.get("/:id", validateParams(etiquetaIdParamSchema), controller.get);
-  router.post("/", validate(createEtiquetaSchema), controller.create);
-  router.put("/:id", validateParams(etiquetaIdParamSchema), validate(updateEtiquetaSchema), controller.update);
-  router.delete("/:id", validateParams(etiquetaIdParamSchema), controller.remove);
+  router.post("/", authenticate, validate(createEtiquetaSchema), controller.create);
+  router.put("/:id", authenticate, validateParams(etiquetaIdParamSchema), validate(updateEtiquetaSchema), controller.update);
+  router.delete("/:id", authenticate, validateParams(etiquetaIdParamSchema), controller.remove);
 
   return router;
 }

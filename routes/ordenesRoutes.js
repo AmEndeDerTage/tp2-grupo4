@@ -6,18 +6,19 @@ import { createOrdenSchema, updateOrdenSchema, queryOrdenesSchema, ordenIdParamS
  * Router de Órdenes.
  * Solo mapea verbo + ruta → validación → método del controlador; nada de lógica acá.
  * Recibe el controlador ya instanciado (inyección de dependencias): este módulo no sabe cómo se armó.
+ * Recibe también authenticate: leer es público, y todo pedido que escribe exige el token antes de validar nada.
  * Las rutas van sin el prefijo /ordenes: lo agrega el container al montar el router.
  */
-function createOrdenesRouter(controller) {
+function createOrdenesRouter(controller, { authenticate }) {
   const router = Router();
 
   router.get("/", validateQuery(queryOrdenesSchema), controller.list);
   router.get("/:id", validateParams(ordenIdParamSchema), controller.get);
-  router.post("/", validate(createOrdenSchema), controller.create);
-  router.put("/:id", validateParams(ordenIdParamSchema), validate(updateOrdenSchema), controller.update);
-  router.delete("/:id", validateParams(ordenIdParamSchema), controller.remove);
+  router.post("/", authenticate, validate(createOrdenSchema), controller.create);
+  router.put("/:id", authenticate, validateParams(ordenIdParamSchema), validate(updateOrdenSchema), controller.update);
+  router.delete("/:id", authenticate, validateParams(ordenIdParamSchema), controller.remove);
   // Una acción sobre la orden, no un campo editable: por eso es un POST a un subrecurso y no un PUT del estado
-  router.post("/:id/ejecucion", validateParams(ordenIdParamSchema), controller.ejecutar);
+  router.post("/:id/ejecucion", authenticate, validateParams(ordenIdParamSchema), controller.ejecutar);
 
   return router;
 }

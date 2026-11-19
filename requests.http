@@ -2,13 +2,27 @@
 ### Documentación interactiva: http://localhost:8000/api-docs
 ### Correrlos EN ORDEN con el servidor recién arrancado y los datos en la semilla: en memoria alcanza con reiniciar;
 ### en sequelize los datos sobreviven al reinicio, así que antes hay que parar el servidor y borrar database.sqlite.
-### Los 133 casos dan lo mismo en los dos modos (PERSISTENCE_TYPE en .env).
+### Los 134 casos (del 0 al 133) dan lo mismo en los dos modos (PERSISTENCE_TYPE en .env).
+### Los pedidos que escriben llevan el token que devuelve el caso 0: por eso hay que correr ese primero.
+### El usuario y la contraseña del caso 0 son los del .env.example; si cambiaste los tuyos, cambialos ahí.
 ### Las órdenes que se crean valen hasta 2030-12-31: la regla 9 (la validez no puede ser anterior a hoy) no las vence.
 ### Los POST que crean responden 201 con el header Location (la URL de lo creado): se ve en los headers de la respuesta.
 ### Los eventos (54 a 75) no cambian las respuestas: se ven en la consola del servidor y en notifications.log.
 ### Los pedidos con "# @name" guardan su respuesta: los siguientes usan el id creado ({{nombre.response.body.$.id}}).
 
 @base = http://localhost:8000
+
+### ===================== SESIÓN =====================
+
+### 0. Iniciar sesión → 200 con { token, tipo, expiraEn }
+# @name login
+POST {{base}}/auth/login
+Content-Type: application/json
+
+{
+  "usuario": "operador",
+  "password": "mellon-1234"
+}
 
 ### ===================== ACTIVOS =====================
 
@@ -26,6 +40,7 @@ GET {{base}}/activos/abc
 
 ### 5. Crear activo con cuerpo incompleto → 400 VALIDATION_ERROR con details (nombre, mercado, ratio, nivel, topeCedears)
 POST {{base}}/activos
+Authorization: Bearer {{login.response.body.$.token}}
 Content-Type: application/json
 
 {
@@ -34,6 +49,7 @@ Content-Type: application/json
 
 ### 6. Crear activo con valores fuera de rango → 400 (ticker en minúscula con espacio, mercado fuera del enum, ratio 0, cantidad negativa)
 POST {{base}}/activos
+Authorization: Bearer {{login.response.body.$.token}}
 Content-Type: application/json
 
 {
@@ -49,6 +65,7 @@ Content-Type: application/json
 ### 7. Crear activo válido sin cantidad → 201, cantidad 0 por defecto, ticker normalizado a mayúsculas
 # @name msft
 POST {{base}}/activos
+Authorization: Bearer {{login.response.body.$.token}}
 Content-Type: application/json
 
 {
@@ -62,6 +79,7 @@ Content-Type: application/json
 
 ### 8. Crear activo con ticker repetido → 409 TICKER_DUPLICADO (regla 2)
 POST {{base}}/activos
+Authorization: Bearer {{login.response.body.$.token}}
 Content-Type: application/json
 
 {
@@ -75,12 +93,14 @@ Content-Type: application/json
 
 ### 9. JSON mal formado → 400 INVALID_JSON
 POST {{base}}/activos
+Authorization: Bearer {{login.response.body.$.token}}
 Content-Type: application/json
 
 { "ticker": "PBR",
 
 ### 10. Actualizar parcialmente (solo nivel) → 200, el resto intacto
 PUT {{base}}/activos/3
+Authorization: Bearer {{login.response.body.$.token}}
 Content-Type: application/json
 
 {
@@ -89,12 +109,14 @@ Content-Type: application/json
 
 ### 11. Actualizar con cuerpo vacío → 400 (hay que enviar al menos un campo)
 PUT {{base}}/activos/3
+Authorization: Bearer {{login.response.body.$.token}}
 Content-Type: application/json
 
 {}
 
 ### 12. Actualizar el ticker al de OTRO activo → 409 TICKER_DUPLICADO
 PUT {{base}}/activos/3
+Authorization: Bearer {{login.response.body.$.token}}
 Content-Type: application/json
 
 {
@@ -103,6 +125,7 @@ Content-Type: application/json
 
 ### 13. Actualizar el ticker al propio → 200 (no es duplicado)
 PUT {{base}}/activos/1
+Authorization: Bearer {{login.response.body.$.token}}
 Content-Type: application/json
 
 {
@@ -112,6 +135,7 @@ Content-Type: application/json
 
 ### 14. Actualizar un activo inexistente → 404
 PUT {{base}}/activos/999
+Authorization: Bearer {{login.response.body.$.token}}
 Content-Type: application/json
 
 {
@@ -138,9 +162,11 @@ GET {{base}}/activos?limit=500
 
 ### 21. Eliminar un activo sin órdenes (el MSFT creado en el caso 7) → 204
 DELETE {{base}}/activos/{{msft.response.body.$.id}}
+Authorization: Bearer {{login.response.body.$.token}}
 
 ### 22. Eliminar el mismo activo de nuevo → 404
 DELETE {{base}}/activos/{{msft.response.body.$.id}}
+Authorization: Bearer {{login.response.body.$.token}}
 
 ### 23. Ruta inexistente → 404 ROUTE_NOT_FOUND
 GET {{base}}/cualquier-cosa
@@ -170,6 +196,7 @@ GET {{base}}/ordenes?estado=cancelada
 ### 30. Crear orden válida → 201, nace "viva" (el estado y el id del body se ignoran)
 # @name nuevaOrden
 POST {{base}}/ordenes
+Authorization: Bearer {{login.response.body.$.token}}
 Content-Type: application/json
 
 {
@@ -185,6 +212,7 @@ Content-Type: application/json
 
 ### 31. Crear con valores inválidos → 400 VALIDATION_ERROR con details (sentido, cantidad, precioLimite, validaHasta)
 POST {{base}}/ordenes
+Authorization: Bearer {{login.response.body.$.token}}
 Content-Type: application/json
 
 {
@@ -197,6 +225,7 @@ Content-Type: application/json
 
 ### 32. REGLA 1 — el activo de la orden no existe → 404 ACTIVO_NO_ENCONTRADO
 POST {{base}}/ordenes
+Authorization: Bearer {{login.response.body.$.token}}
 Content-Type: application/json
 
 {
@@ -210,6 +239,7 @@ Content-Type: application/json
 ### 33. (preparación de la regla 4) Activo en nivel L1, solo seguimiento → 201
 # @name activoL1
 POST {{base}}/activos
+Authorization: Bearer {{login.response.body.$.token}}
 Content-Type: application/json
 
 {
@@ -223,6 +253,7 @@ Content-Type: application/json
 
 ### 34. REGLA 4 — comprar un activo de nivel L1 → 409 NIVEL_NO_OPERABLE
 POST {{base}}/ordenes
+Authorization: Bearer {{login.response.body.$.token}}
 Content-Type: application/json
 
 {
@@ -235,6 +266,7 @@ Content-Type: application/json
 
 ### 35. REGLA 3 — misma orden viva (activo, sentido y precio de la 3) → 409 ORDEN_DUPLICADA
 POST {{base}}/ordenes
+Authorization: Bearer {{login.response.body.$.token}}
 Content-Type: application/json
 
 {
@@ -247,6 +279,7 @@ Content-Type: application/json
 
 ### 36. REGLA 5 — vender más de lo disponible (KO: 45 en cartera − 10 en ventas vivas = 35) → 409 CANTIDAD_INSUFICIENTE
 POST {{base}}/ordenes
+Authorization: Bearer {{login.response.body.$.token}}
 Content-Type: application/json
 
 {
@@ -259,6 +292,7 @@ Content-Type: application/json
 
 ### 37. REGLA 6 — comprar por encima del tope (AAPL: 0 + 15 en compras vivas + 16 = 31 > 30) → 409 TOPE_EXCEDIDO
 POST {{base}}/ordenes
+Authorization: Bearer {{login.response.body.$.token}}
 Content-Type: application/json
 
 {
@@ -271,6 +305,7 @@ Content-Type: application/json
 
 ### 38. Modificar parcialmente (precio) → 200
 PUT {{base}}/ordenes/{{nuevaOrden.response.body.$.id}}
+Authorization: Bearer {{login.response.body.$.token}}
 Content-Type: application/json
 
 {
@@ -279,6 +314,7 @@ Content-Type: application/json
 
 ### 39. REGLA 3 al editar — llevar el precio al de otra orden viva (la 3, a 12.5) → 409 ORDEN_DUPLICADA
 PUT {{base}}/ordenes/{{nuevaOrden.response.body.$.id}}
+Authorization: Bearer {{login.response.body.$.token}}
 Content-Type: application/json
 
 {
@@ -287,6 +323,7 @@ Content-Type: application/json
 
 ### 40. REGLA 6 al editar — su propia cantidad no se cuenta: 0 + 10 (la 3) + 21 = 31 > 30 → 409 TOPE_EXCEDIDO
 PUT {{base}}/ordenes/{{nuevaOrden.response.body.$.id}}
+Authorization: Bearer {{login.response.body.$.token}}
 Content-Type: application/json
 
 {
@@ -295,6 +332,7 @@ Content-Type: application/json
 
 ### 41. REGLA 5 al editar — la venta 1 a 46 (KO: 45 en cartera, su propio 10 no se cuenta) → 409 CANTIDAD_INSUFICIENTE
 PUT {{base}}/ordenes/1
+Authorization: Bearer {{login.response.body.$.token}}
 Content-Type: application/json
 
 {
@@ -303,6 +341,7 @@ Content-Type: application/json
 
 ### 42. REGLA 7 — modificar una orden ejecutada → 409 ORDEN_NO_MODIFICABLE
 PUT {{base}}/ordenes/2
+Authorization: Bearer {{login.response.body.$.token}}
 Content-Type: application/json
 
 {
@@ -311,9 +350,11 @@ Content-Type: application/json
 
 ### 43. REGLA 7 — borrar una orden ejecutada → 409 ORDEN_NO_MODIFICABLE
 DELETE {{base}}/ordenes/2
+Authorization: Bearer {{login.response.body.$.token}}
 
 ### 44. Modificar con campos no editables (activoId, sentido) → 400 (se descartan y no queda ninguno)
 PUT {{base}}/ordenes/1
+Authorization: Bearer {{login.response.body.$.token}}
 Content-Type: application/json
 
 {
@@ -323,6 +364,7 @@ Content-Type: application/json
 
 ### 45. Modificar una orden inexistente → 404 ORDEN_NO_ENCONTRADA
 PUT {{base}}/ordenes/999
+Authorization: Bearer {{login.response.body.$.token}}
 Content-Type: application/json
 
 {
@@ -331,14 +373,17 @@ Content-Type: application/json
 
 ### 46. Borrar una orden viva (es la forma de cancelarla) → 204
 DELETE {{base}}/ordenes/{{nuevaOrden.response.body.$.id}}
+Authorization: Bearer {{login.response.body.$.token}}
 
 ### 47. Borrar la misma orden de nuevo → 404 ORDEN_NO_ENCONTRADA
 DELETE {{base}}/ordenes/{{nuevaOrden.response.body.$.id}}
+Authorization: Bearer {{login.response.body.$.token}}
 
 ### ===================== RELACIÓN ACTIVO 1:N ORDEN =====================
 
 ### 48. REGLA 8 — borrar un activo con órdenes (KO: una viva y una ejecutada) → 409 ACTIVO_CON_ORDENES
 DELETE {{base}}/activos/1
+Authorization: Bearer {{login.response.body.$.token}}
 
 ### 49. Órdenes de un activo → 200 { page, limit, total, data } (las 2 de KO)
 GET {{base}}/activos/1/ordenes
@@ -351,6 +396,7 @@ GET {{base}}/activos/{{activoL1.response.body.$.id}}/ordenes
 
 ### 52. Ese activo sin órdenes sí se puede borrar → 204 (la regla 8 no lo bloquea)
 DELETE {{base}}/activos/{{activoL1.response.body.$.id}}
+Authorization: Bearer {{login.response.body.$.token}}
 
 ### 53. Órdenes de un activo inexistente → 404 ACTIVO_NO_ENCONTRADO
 GET {{base}}/activos/999/ordenes
@@ -363,6 +409,7 @@ GET {{base}}/activos/999/ordenes
 ### 54. Compra que no llega al umbral (AAPL: 10 + 5 = 15 de 30, 50 %) → 201 · consola: tabla; sin aviso de tope
 # @name compraAapl
 POST {{base}}/ordenes
+Authorization: Bearer {{login.response.body.$.token}}
 Content-Type: application/json
 
 {
@@ -376,6 +423,7 @@ Content-Type: application/json
 
 ### 55. Editar solo el precio de esa compra → 200 · sin eventos (la cantidad no cambió)
 PUT {{base}}/ordenes/{{compraAapl.response.body.$.id}}
+Authorization: Bearer {{login.response.body.$.token}}
 Content-Type: application/json
 
 {
@@ -384,6 +432,7 @@ Content-Type: application/json
 
 ### 56. Editar su cantidad a 17 (AAPL: 10 + 17 = 27 de 30, 90 %) → 200 · aviso de tope en notifications.log y en consola; sin tabla (la orden ya existía)
 PUT {{base}}/ordenes/{{compraAapl.response.body.$.id}}
+Authorization: Bearer {{login.response.body.$.token}}
 Content-Type: application/json
 
 {
@@ -392,6 +441,7 @@ Content-Type: application/json
 
 ### 57. Venta (KO: 45 en cartera − 10 en ventas vivas = 35 disponibles) → 201 · consola: tabla de VENTA; las ventas no miran el tope
 POST {{base}}/ordenes
+Authorization: Bearer {{login.response.body.$.token}}
 Content-Type: application/json
 
 {
@@ -404,6 +454,7 @@ Content-Type: application/json
 
 ### 58. Compra que llena el tope (AAPL: 10 + 17 + 3 = 30 de 30, 100 %) → 201 · consola: tabla y aviso de tope; notifications.log: aviso de tope
 POST {{base}}/ordenes
+Authorization: Bearer {{login.response.body.$.token}}
 Content-Type: application/json
 
 {
@@ -416,6 +467,7 @@ Content-Type: application/json
 
 ### 59. Una compra más, rechazada por la regla 6 (30 + 1 > 30) → 409 TOPE_EXCEDIDO · sin eventos: no se guardó nada
 POST {{base}}/ordenes
+Authorization: Bearer {{login.response.body.$.token}}
 Content-Type: application/json
 
 {
@@ -435,28 +487,35 @@ Content-Type: application/json
 
 ### 60. Ejecutar la compra 3 (AAPL: 10 CEDEARs) → 200, estado "ejecutada" · consola: orden ejecutada, cartera 0 → 10, nivel L2 → L3; sin aviso de tope (lo comprometido sigue en 30: pasa de compra viva a cartera)
 POST {{base}}/ordenes/3/ejecucion
+Authorization: Bearer {{login.response.body.$.token}}
 
 ### 61. El activo quedó ajustado → 200 (AAPL: nivel L3, cantidad 10)
 GET {{base}}/activos/2
 
 ### 62. REGLA 7 — ejecutar de nuevo la misma orden → 409 ORDEN_NO_MODIFICABLE (la cartera no se mueve dos veces)
 POST {{base}}/ordenes/3/ejecucion
+Authorization: Bearer {{login.response.body.$.token}}
 
 ### 63. Ejecutar una orden inexistente → 404 ORDEN_NO_ENCONTRADA
 POST {{base}}/ordenes/999/ejecucion
+Authorization: Bearer {{login.response.body.$.token}}
 
 ### 64. Ejecutar con un id inválido → 400 VALIDATION_ERROR (params)
 POST {{base}}/ordenes/abc/ejecucion
+Authorization: Bearer {{login.response.body.$.token}}
 
 ### 65. Ejecutar la venta 1 (KO: 45 → 35) → 200 · consola: orden ejecutada; KO sigue en L3
 POST {{base}}/ordenes/1/ejecucion
+Authorization: Bearer {{login.response.body.$.token}}
 
 ### 66. Ejecutar la venta 6 (KO: 35 → 30) → 200
 POST {{base}}/ordenes/6/ejecucion
+Authorization: Bearer {{login.response.body.$.token}}
 
 ### 67. Vender los 30 KO que quedan (30 en cartera − 0 en ventas vivas) → 201 · consola: tabla de VENTA
 # @name ventaTotal
 POST {{base}}/ordenes
+Authorization: Bearer {{login.response.body.$.token}}
 Content-Type: application/json
 
 {
@@ -470,6 +529,7 @@ Content-Type: application/json
 
 ### 68. Ejecutarla → 200 · KO queda con 0 en cartera y vuelve a L2 · consola: cartera 30 → 0, nivel L3 → L2
 POST {{base}}/ordenes/{{ventaTotal.response.body.$.id}}/ejecucion
+Authorization: Bearer {{login.response.body.$.token}}
 
 ### ===================== EDITAR EL ACTIVO RESPETA LO COMPROMETIDO (reglas 5 y 6 desde el activo) =====================
 ### PUT /activos/:id que toca cantidad o topeCedears: la cartera tiene que cubrir las ventas vivas y cartera + compras
@@ -478,6 +538,7 @@ POST {{base}}/ordenes/{{ventaTotal.response.body.$.id}}/ejecucion
 
 ### 69. Bajar el tope de AAPL a 25 (10 + 20 = 30 > 25) → 409 TOPE_EXCEDIDO
 PUT {{base}}/activos/2
+Authorization: Bearer {{login.response.body.$.token}}
 Content-Type: application/json
 
 {
@@ -486,6 +547,7 @@ Content-Type: application/json
 
 ### 70. Subir la cartera de AAPL a 15 (15 + 20 = 35 > 30) → 409 TOPE_EXCEDIDO
 PUT {{base}}/activos/2
+Authorization: Bearer {{login.response.body.$.token}}
 Content-Type: application/json
 
 {
@@ -494,6 +556,7 @@ Content-Type: application/json
 
 ### 71. (preparación) Vender 5 AAPL (10 en cartera) → 201 · consola: tabla de VENTA
 POST {{base}}/ordenes
+Authorization: Bearer {{login.response.body.$.token}}
 Content-Type: application/json
 
 {
@@ -506,6 +569,7 @@ Content-Type: application/json
 
 ### 72. Bajar la cartera de AAPL a 4 con 5 en ventas vivas → 409 CANTIDAD_INSUFICIENTE
 PUT {{base}}/activos/2
+Authorization: Bearer {{login.response.body.$.token}}
 Content-Type: application/json
 
 {
@@ -514,6 +578,7 @@ Content-Type: application/json
 
 ### 73. Subir el tope de AAPL a 32 (30 de 32, 93,8 %) → 200 · aviso de tope en notifications.log y en consola
 PUT {{base}}/activos/2
+Authorization: Bearer {{login.response.body.$.token}}
 Content-Type: application/json
 
 {
@@ -522,6 +587,7 @@ Content-Type: application/json
 
 ### 74. Subir el tope de AAPL a 40 (30 de 40, 75 %) → 200 · sin aviso
 PUT {{base}}/activos/2
+Authorization: Bearer {{login.response.body.$.token}}
 Content-Type: application/json
 
 {
@@ -530,6 +596,7 @@ Content-Type: application/json
 
 ### 75. Cambiar solo el nombre → 200 · sin aviso (no toca cantidad ni tope)
 PUT {{base}}/activos/2
+Authorization: Bearer {{login.response.body.$.token}}
 Content-Type: application/json
 
 {
@@ -557,6 +624,7 @@ GET {{base}}/etiquetas/999
 ### 81. Crear una etiqueta: el nombre se normaliza ("  Renta-Fija " → "renta-fija") → 201
 # @name rentaFija
 POST {{base}}/etiquetas
+Authorization: Bearer {{login.response.body.$.token}}
 Content-Type: application/json
 
 {
@@ -565,6 +633,7 @@ Content-Type: application/json
 
 ### 82. Nombre repetido, aunque cambien las mayúsculas → 409 ETIQUETA_DUPLICADA
 POST {{base}}/etiquetas
+Authorization: Bearer {{login.response.body.$.token}}
 Content-Type: application/json
 
 {
@@ -573,6 +642,7 @@ Content-Type: application/json
 
 ### 83. Nombre con tilde (va tal cual en la URL del filtro: sin tildes ni espacios) → 400 VALIDATION_ERROR (body)
 POST {{base}}/etiquetas
+Authorization: Bearer {{login.response.body.$.token}}
 Content-Type: application/json
 
 {
@@ -581,6 +651,7 @@ Content-Type: application/json
 
 ### 84. Renombrar renta-fija a bonos → 200
 PUT {{base}}/etiquetas/{{rentaFija.response.body.$.id}}
+Authorization: Bearer {{login.response.body.$.token}}
 Content-Type: application/json
 
 {
@@ -589,6 +660,7 @@ Content-Type: application/json
 
 ### 85. Renombrar con el nombre de otra etiqueta → 409 ETIQUETA_DUPLICADA
 PUT {{base}}/etiquetas/{{rentaFija.response.body.$.id}}
+Authorization: Bearer {{login.response.body.$.token}}
 Content-Type: application/json
 
 {
@@ -597,6 +669,7 @@ Content-Type: application/json
 
 ### 86. PUT sin campos → 400 VALIDATION_ERROR (body)
 PUT {{base}}/etiquetas/{{rentaFija.response.body.$.id}}
+Authorization: Bearer {{login.response.body.$.token}}
 Content-Type: application/json
 
 {}
@@ -617,18 +690,23 @@ GET {{base}}/activos/999/etiquetas
 
 ### 90. Asignar dividendos a AAPL → 201 con las etiquetas del activo (dividendos y tecnologia)
 POST {{base}}/activos/2/etiquetas/1
+Authorization: Bearer {{login.response.body.$.token}}
 
 ### 91. Asignarla otra vez → 409 ETIQUETA_YA_ASIGNADA
 POST {{base}}/activos/2/etiquetas/1
+Authorization: Bearer {{login.response.body.$.token}}
 
 ### 92. Asignar una etiqueta inexistente → 404 ETIQUETA_NO_ENCONTRADA
 POST {{base}}/activos/2/etiquetas/999
+Authorization: Bearer {{login.response.body.$.token}}
 
 ### 93. Asignar a un activo inexistente → 404 ACTIVO_NO_ENCONTRADO
 POST {{base}}/activos/999/etiquetas/1
+Authorization: Bearer {{login.response.body.$.token}}
 
 ### 94. Id de etiqueta inválido en la URL → 400 VALIDATION_ERROR (params)
 POST {{base}}/activos/2/etiquetas/abc
+Authorization: Bearer {{login.response.body.$.token}}
 
 ### 95. Filtrar por etiqueta → 200 (KO y AAPL, cada uno con TODAS sus etiquetas, no solo dividendos)
 GET {{base}}/activos?etiqueta=dividendos
@@ -644,12 +722,15 @@ GET {{base}}/activos?etiqueta=tecnología
 
 ### 99. Quitar dividendos de AAPL → 204 (la etiqueta sigue existiendo)
 DELETE {{base}}/activos/2/etiquetas/1
+Authorization: Bearer {{login.response.body.$.token}}
 
 ### 100. Quitarla otra vez → 404 ETIQUETA_NO_ASIGNADA
 DELETE {{base}}/activos/2/etiquetas/1
+Authorization: Bearer {{login.response.body.$.token}}
 
 ### 101. Quitar una etiqueta inexistente → 404 ETIQUETA_NO_ENCONTRADA
 DELETE {{base}}/activos/2/etiquetas/999
+Authorization: Bearer {{login.response.body.$.token}}
 
 ### ===================== OPERACIÓN ATÓMICA SOBRE LA N:N =====================
 ### POST /activos acepta etiquetaIds: el activo y sus vínculos se escriben en UNA transacción, todo o nada.
@@ -657,6 +738,7 @@ DELETE {{base}}/activos/2/etiquetas/999
 ### 102. Alta de PG con dividendos y defensivo → 201 con sus dos etiquetas anidadas
 # @name pg
 POST {{base}}/activos
+Authorization: Bearer {{login.response.body.$.token}}
 Content-Type: application/json
 
 {
@@ -671,6 +753,7 @@ Content-Type: application/json
 
 ### 103. Alta de JNJ con una etiqueta que existe y dos que no → 404 ETIQUETA_NO_ENCONTRADA (details con las dos que faltan)
 POST {{base}}/activos
+Authorization: Bearer {{login.response.body.$.token}}
 Content-Type: application/json
 
 {
@@ -688,6 +771,7 @@ GET {{base}}/activos?etiqueta=defensivo
 
 ### 105. Etiquetas repetidas en el alta → 400 VALIDATION_ERROR (body: se decide mirando solo el pedido)
 POST {{base}}/activos
+Authorization: Bearer {{login.response.body.$.token}}
 Content-Type: application/json
 
 {
@@ -703,6 +787,7 @@ Content-Type: application/json
 ### 106. Alta sin etiquetaIds, como antes → 201 con "etiquetas": []
 # @name xom
 POST {{base}}/activos
+Authorization: Bearer {{login.response.body.$.token}}
 Content-Type: application/json
 
 {
@@ -720,21 +805,25 @@ Content-Type: application/json
 
 ### 107. Borrar defensivo, que la tienen KO y PG → 204 (en una transacción: sus vínculos y la etiqueta)
 DELETE {{base}}/etiquetas/3
+Authorization: Bearer {{login.response.body.$.token}}
 
 ### 108. KO quedó solo con dividendos → 200
 GET {{base}}/activos/1/etiquetas
 
 ### 109. Borrar PG (sin órdenes) → 204: se lleva sus vínculos
 DELETE {{base}}/activos/{{pg.response.body.$.id}}
+Authorization: Bearer {{login.response.body.$.token}}
 
 ### 110. Dividendos ya no está en PG → 200 (solo KO)
 GET {{base}}/activos?etiqueta=dividendos
 
 ### 111. Borrar XOM → 204
 DELETE {{base}}/activos/{{xom.response.body.$.id}}
+Authorization: Bearer {{login.response.body.$.token}}
 
 ### 112. Borrar la etiqueta bonos → 204
 DELETE {{base}}/etiquetas/{{rentaFija.response.body.$.id}}
+Authorization: Bearer {{login.response.body.$.token}}
 
 ### 113. Etiquetas al final → 200 (dividendos, tecnologia, argentina, energia)
 GET {{base}}/etiquetas
@@ -757,12 +846,14 @@ GET {{base}}/activos/999/etiquetas/1
 
 ### 118. Asignar energia a GGAL → 201 · header Location: /activos/3/etiquetas/5
 POST {{base}}/activos/3/etiquetas/5
+Authorization: Bearer {{login.response.body.$.token}}
 
 ### 119. Seguir el Location del caso 118 → 200 con energia
 GET {{base}}/activos/3/etiquetas/5
 
 ### 120. Quitar energia de GGAL → 204
 DELETE {{base}}/activos/3/etiquetas/5
+Authorization: Bearer {{login.response.body.$.token}}
 
 ### 121. El mismo GET después de quitarla → 404 ETIQUETA_NO_ASIGNADA
 GET {{base}}/activos/3/etiquetas/5
@@ -772,6 +863,7 @@ GET {{base}}/activos/3/etiquetas/5
 
 ### 122. Alta con más cartera (101) que tope (100) → 409 TOPE_EXCEDIDO
 POST {{base}}/activos
+Authorization: Bearer {{login.response.body.$.token}}
 Content-Type: application/json
 
 {
@@ -786,6 +878,7 @@ Content-Type: application/json
 
 ### 123. Borde: con la cartera justo en el tope (100 de 100) → 201
 POST {{base}}/activos
+Authorization: Bearer {{login.response.body.$.token}}
 Content-Type: application/json
 
 {
@@ -807,6 +900,7 @@ GET {{base}}/activos/%E0%A4%A
 
 ### 125. Charset que no existe → 415 UNSUPPORTED_MEDIA_TYPE
 POST {{base}}/etiquetas
+Authorization: Bearer {{login.response.body.$.token}}
 Content-Type: application/json; charset=foo
 
 {
@@ -818,6 +912,7 @@ Content-Type: application/json; charset=foo
 
 ### 126. Editar un activo inexistente con el ticker de otro → 404 ACTIVO_NO_ENCONTRADO
 PUT {{base}}/activos/999
+Authorization: Bearer {{login.response.body.$.token}}
 Content-Type: application/json
 
 {
@@ -826,6 +921,7 @@ Content-Type: application/json
 
 ### 127. Renombrar una etiqueta inexistente con el nombre de otra → 404 ETIQUETA_NO_ENCONTRADA
 PUT {{base}}/etiquetas/999
+Authorization: Bearer {{login.response.body.$.token}}
 Content-Type: application/json
 
 {
@@ -838,6 +934,7 @@ Content-Type: application/json
 ### 128. (preparación) Alta de un activo en L2 → 201
 # @name tsla
 POST {{base}}/activos
+Authorization: Bearer {{login.response.body.$.token}}
 Content-Type: application/json
 
 {
@@ -852,6 +949,7 @@ Content-Type: application/json
 ### 129. (preparación) Una compra viva de 5 TSLA → 201 · consola: tabla de COMPRA
 # @name compraTsla
 POST {{base}}/ordenes
+Authorization: Bearer {{login.response.body.$.token}}
 Content-Type: application/json
 
 {
@@ -864,6 +962,7 @@ Content-Type: application/json
 
 ### 130. Bajar TSLA a L1 con su compra viva → 409 NIVEL_NO_OPERABLE
 PUT {{base}}/activos/{{tsla.response.body.$.id}}
+Authorization: Bearer {{login.response.body.$.token}}
 Content-Type: application/json
 
 {
@@ -872,6 +971,7 @@ Content-Type: application/json
 
 ### 131. Borde: pasarlo a L3, que también permite comprar → 200
 PUT {{base}}/activos/{{tsla.response.body.$.id}}
+Authorization: Bearer {{login.response.body.$.token}}
 Content-Type: application/json
 
 {
@@ -884,6 +984,7 @@ Content-Type: application/json
 
 ### 132. Armar una orden que ya venció → 409 VALIDEZ_VENCIDA
 POST {{base}}/ordenes
+Authorization: Bearer {{login.response.body.$.token}}
 Content-Type: application/json
 
 {
@@ -896,6 +997,7 @@ Content-Type: application/json
 
 ### 133. Llevar la validez de una orden viva al pasado → 409 VALIDEZ_VENCIDA
 PUT {{base}}/ordenes/{{compraTsla.response.body.$.id}}
+Authorization: Bearer {{login.response.body.$.token}}
 Content-Type: application/json
 
 {
