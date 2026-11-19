@@ -27,7 +27,7 @@ class ActivosController {
     res.json(activo);
   };
 
-  // POST /activos → 201 con el header Location: la URL del activo creado (clase 13), donde un GET lo devuelve
+  // POST /activos → 201 con el header Location: la URL del activo creado, donde un GET lo devuelve
   create = async (req, res) => {
     const activo = await this.#useCases.createActivo(req.body);
     res.status(201).location(`/activos/${activo.id}`).json(activo);

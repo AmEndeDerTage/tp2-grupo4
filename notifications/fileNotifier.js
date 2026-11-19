@@ -14,6 +14,7 @@ import { NOTIFICATIONS_LOG_PATH } from "../config/config.js";
  * Si la ruta no existe o no se puede escribir, appendFile rechaza: el que lo atrapa es el listener.
  */
 const fileNotifier = {
+  // Agrega al archivo la fecha y el asunto en una línea, y el cuerpo debajo con sangría
   async notify({ subject, body }) {
     const cuerpo = body.split("\n").map((linea) => `    ${linea}`).join("\n");
     await appendFile(NOTIFICATIONS_LOG_PATH, `${new Date().toISOString()} | ${subject}\n${cuerpo}\n`);

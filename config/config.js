@@ -3,6 +3,7 @@
  * Lee las variables de entorno (cargadas con `node --env-file=.env`) y exporta constantes
  * con valores por defecto. Es el único módulo de la aplicación que toca process.env.
  */
+// Valores aceptados: cualquier otro corta el arranque (ver las verificaciones de abajo)
 const PERSISTENCE_TYPES = ["memory", "sequelize"];
 const NOTIFIER_TYPES = ["console", "file"];
 
@@ -17,7 +18,7 @@ if (!PERSISTENCE_TYPES.includes(PERSISTENCE_TYPE)) {
   );
 }
 
-// Eventos (clase 10)
+// Eventos de dominio: por dónde salen los avisos y cuándo se avisa
 // Por dónde salen los avisos de orden.creada y orden.ejecutada: "console" (default) o "file" (se agregan a NOTIFICATIONS_LOG_PATH)
 const NOTIFIER_TYPE = process.env.NOTIFIER_TYPE || "console";
 // Archivo de fileNotifier. Apuntarlo a una ruta imposible es la forma de probar que un notificador roto no tumba el POST

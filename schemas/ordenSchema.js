@@ -7,7 +7,9 @@ import { z } from "zod";
  * las órdenes vivas) no van acá: viven en los casos de uso de Órdenes.
  */
 
+// Valores permitidos de los campos enumerados
 const SENTIDOS = ["compra", "venta"];
+// Una orden nace "viva"; "ejecutada" es historia y no se modifica ni se borra. No hay "cancelada": cancelar es borrar la viva
 const ESTADOS = ["viva", "ejecutada"];
 
 // Columnas por las que se puede ordenar: el DAO las usa tal cual (en SQL van al ORDER BY)

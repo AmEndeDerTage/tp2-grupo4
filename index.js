@@ -5,6 +5,8 @@ import errorHandler from "./middlewares/errorHandler.js";
 import { PORT, PERSISTENCE_TYPE } from "./config/config.js";
 import buildContainer from "./container/container.js";
 
+// Punto de entrada: arma la app de Express, le monta el router que entrega el container y empieza a escuchar.
+// No conoce ninguna entidad ni ninguna ruta: todo eso lo ensambla el container.
 async function startServer() {
   const app = express();
 

@@ -14,6 +14,7 @@ import EVENTS from "../events/eventNames.js";
  * que ya guardó la orden. Un aviso que falla se registra y nada más: la operación ya ocurrió.
  */
 function registerAlertListeners(bus, { ordenNotifier, topeNotifier }) {
+  // orden.creada → la tabla para colocar la orden a mano en el broker
   bus.on(EVENTS.ORDEN_CREADA, async (orden) => {
     try {
       await ordenNotifier.notify({
@@ -25,6 +26,7 @@ function registerAlertListeners(bus, { ordenNotifier, topeNotifier }) {
     }
   });
 
+  // orden.ejecutada → una línea con lo que cambió en la cartera
   bus.on(EVENTS.ORDEN_EJECUTADA, async (ejecucion) => {
     try {
       await ordenNotifier.notify({
@@ -36,6 +38,7 @@ function registerAlertListeners(bus, { ordenNotifier, topeNotifier }) {
     }
   });
 
+  // activo.topeCerca → cuánto del tope está comprometido, por el notificador adicional
   bus.on(EVENTS.ACTIVO_TOPE_CERCA, async ({ ticker, cartera, enComprasVivas, comprometido, topeCedears, pct, umbralPct }) => {
     try {
       await topeNotifier.notify({

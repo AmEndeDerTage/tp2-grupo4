@@ -5,6 +5,7 @@
  * `body` puede tener varias líneas (la tabla de la orden): se imprime debajo del asunto.
  */
 const consoleNotifier = {
+  // Imprime el asunto y, debajo, el cuerpo
   async notify({ subject, body }) {
     console.log(`[NOTIFICACIÓN] ${subject}\n${body}`);
   },

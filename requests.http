@@ -355,7 +355,7 @@ DELETE {{base}}/activos/{{activoL1.response.body.$.id}}
 ### 53. Órdenes de un activo inexistente → 404 ACTIVO_NO_ENCONTRADO
 GET {{base}}/activos/999/ordenes
 
-### ===================== EVENTOS (clase 10) =====================
+### ===================== EVENTOS DE DOMINIO =====================
 ### No cambian ninguna respuesta. orden.creada imprime la tabla en la consola del servidor (o en notifications.log con
 ### NOTIFIER_TYPE=file); activo.topeCerca va siempre por dos canales: notifications.log y la consola. Umbral: TOPE_CERCA_PCT=90.
 ### AAPL en este punto: 0 en cartera, tope 30, una compra viva de 10 (la 3). El 90 % de 30 es 27.
@@ -426,7 +426,7 @@ Content-Type: application/json
   "validaHasta": "2030-12-31"
 }
 
-### ===================== EJECUCIÓN CON TRANSACCIÓN (extra) =====================
+### ===================== EJECUCIÓN CON TRANSACCIÓN =====================
 ### POST /ordenes/:id/ejecucion asienta que la orden se llenó en el broker: la orden pasa a "ejecutada" y la cartera
 ### del activo se mueve (+ en compra, − en venta), todo en UNA transacción. El nivel sigue a la posición: compra → L3;
 ### venta que deja un L3 en 0 → L2. Cada ejecución emite orden.ejecutada (consola o archivo, según NOTIFIER_TYPE).
@@ -601,7 +601,7 @@ Content-Type: application/json
 
 {}
 
-### ===================== RELACIÓN ACTIVO N:N ETIQUETA (extra) =====================
+### ===================== RELACIÓN ACTIVO N:N ETIQUETA =====================
 ### Un activo tiene muchas etiquetas y una etiqueta está en muchos activos: tabla intermedia activo_etiquetas.
 ### Cada vínculo es un subrecurso: POST lo crea y DELETE lo borra (/activos/:id/etiquetas/:etiquetaId).
 ### Todo activo trae sus etiquetas anidadas. En este punto: KO [dividendos, defensivo] · AAPL (L3) [tecnologia] · GGAL [argentina].
@@ -651,7 +651,7 @@ DELETE {{base}}/activos/2/etiquetas/1
 ### 101. Quitar una etiqueta inexistente → 404 ETIQUETA_NO_ENCONTRADA
 DELETE {{base}}/activos/2/etiquetas/999
 
-### ===================== OPERACIÓN ATÓMICA SOBRE LA N:N (extra) =====================
+### ===================== OPERACIÓN ATÓMICA SOBRE LA N:N =====================
 ### POST /activos acepta etiquetaIds: el activo y sus vínculos se escriben en UNA transacción, todo o nada.
 
 ### 102. Alta de PG con dividendos y defensivo → 201 con sus dos etiquetas anidadas

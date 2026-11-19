@@ -27,7 +27,7 @@ class OrdenesController {
     res.json(orden);
   };
 
-  // POST /ordenes → 201 con el header Location: la URL de la orden creada (clase 13)
+  // POST /ordenes → 201 con el header Location: la URL de la orden creada, donde un GET la devuelve
   // (las reglas de negocio las aplica el caso de uso; si alguna falla, el AppError llega al errorHandler)
   create = async (req, res) => {
     const orden = await this.#useCases.createOrden(req.body);

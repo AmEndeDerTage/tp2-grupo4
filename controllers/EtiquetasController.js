@@ -25,7 +25,7 @@ class EtiquetasController {
     res.json(etiqueta);
   };
 
-  // POST /etiquetas → 201 con el header Location: la URL de la etiqueta creada (clase 13)
+  // POST /etiquetas → 201 con el header Location: la URL de la etiqueta creada, donde un GET la devuelve
   create = async (req, res) => {
     const etiqueta = await this.#useCases.createEtiqueta(req.body);
     res.status(201).location(`/etiquetas/${etiqueta.id}`).json(etiqueta);

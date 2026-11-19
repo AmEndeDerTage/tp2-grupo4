@@ -7,7 +7,9 @@ import { nombreEtiqueta } from "./etiquetaSchema.js";
  * (p. ej. ticker único) no van acá: viven en los casos de uso.
  */
 
+// Valores permitidos de los campos enumerados (se exportan: son parte del vocabulario del dominio)
 const MERCADOS = ["NYSE", "NASDAQ", "BYMA"];
+// L0 y L1: solo seguimiento · L2: lista para comprar · L3: con posición en cartera
 const NIVELES = ["L0", "L1", "L2", "L3"];
 
 // Columnas por las que se puede ordenar: el DAO las usa tal cual (en SQL van al ORDER BY)
@@ -36,7 +38,7 @@ const campos = {
 
 // POST /activos: todo obligatorio salvo cantidad (un activo puede darse de alta sin posición) y etiquetaIds.
 // etiquetaIds: las etiquetas con las que nace el activo (la operación atómica de la N:N: activo + vínculos, todo o nada).
-// Que no se repitan es una validación cruzada entre elementos del mismo pedido (refine, como en la clase 13): se decide
+// Que no se repitan es una validación cruzada entre elementos del mismo pedido (refine): se decide
 // mirando solo el pedido, así que es de forma (400). Que existan, en cambio, necesita consultar datos: caso de uso (404).
 const createActivoSchema = z.object({
   ticker: campos.ticker,

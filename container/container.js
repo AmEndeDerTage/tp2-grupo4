@@ -43,7 +43,7 @@ async function buildContainer() {
   }
 
   // 2. Eventos: un solo bus para toda la app. Los listeners de alerts/ se registran acá con sus notificadores:
-  //    orden.creada y orden.ejecutada salen por el de NOTIFIER_TYPE; activo.topeCerca, por un notificador adicional (extra de la consigna)
+  //    orden.creada y orden.ejecutada salen por el de NOTIFIER_TYPE; activo.topeCerca, por un notificador adicional
   //    que avisa por dos canales a la vez: archivo y consola. Sumar otro canal es agregarlo a esta lista.
   const events = createEventBus();
   registerAlertListeners(events, {
@@ -58,7 +58,7 @@ async function buildContainer() {
   // Cada entidad recibe también el DAO de la otra: Activos lo usa para la regla 8 y Órdenes para las reglas sobre el activo.
   // Activos recibe además el de Etiquetas, para asignar y quitar etiquetas (la N:N).
   // Las dos reciben la misma forma de transacción, elegida por la factory igual que los DAOs.
-  // Los números de las reglas también se inyectan desde acá (clase 13): el umbral del aviso de tope llega a los casos de uso
+  // Los números de las reglas también se inyectan desde acá: el umbral del aviso de tope llega a los casos de uso
   // como topeCercaPct, así que ninguno importa config.js y un test puede usar otro valor.
   // El reloj también se inyecta: ningún caso de uso llama a new Date(), así que un test decide qué día es. Con CLOCK_NOW queda fijo.
   const transaccion = getTransaccion();

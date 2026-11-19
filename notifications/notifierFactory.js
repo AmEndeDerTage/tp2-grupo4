@@ -10,7 +10,7 @@ import fileNotifier from "./fileNotifier.js";
  *          Pasarlo explícito permite al container fijar el canal de un evento sin importar implementaciones concretas.
  *
  * Cómo se sumaría un canal de otro tipo (NO implementado; queda como ejemplo de extensión):
- *  1. notifications/webhookNotifier.js con el mismo contrato. Por ejemplo, un POST con fetch (clase 12) al webhook
+ *  1. notifications/webhookNotifier.js con el mismo contrato. Por ejemplo, un POST con fetch al webhook
  *     de un canal de Slack, Discord o Teams:
  *        async notify({ subject, body }) {
  *          const res = await fetch(WEBHOOK_URL, {
