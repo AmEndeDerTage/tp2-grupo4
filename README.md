@@ -163,6 +163,8 @@ Con el servidor andando: **[`http://localhost:8000/api-docs`](http://localhost:8
 
 Es Swagger UI sobre la especificación OpenAPI 3 de `docs/openapi.yaml`, servida con `swagger-ui-express`. Cada endpoint tiene sus parámetros, cuerpos con ejemplos y todas sus respuestas posibles (200 · 201 · 204 · 400 · 404 · 409 · 500, más 413 y 415 en los pedidos con cuerpo). Los schemas de las entidades y del error se definen una vez en `components/schemas` y se reutilizan con `$ref`. «Try it out» funciona contra el servidor en los dos modos de persistencia. El listado de endpoints vive ahí y no se repite en este README.
 
+**Postman u otras herramientas.** La misma especificación se publica cruda en `http://localhost:8000/api-docs/openapi.json`. En Postman, *Import → Link* con esa URL (o *Import → File* con `docs/openapi.yaml`) arma una colección con todos los pedidos, agrupados por entidad. La colección trae la variable `baseUrl` en `/`: hay que cambiarla por `http://localhost:8000`.
+
 ## Eventos de dominio
 
 Un único bus (`EventEmitter`) se crea en el container (`container/container.js`) y se inyecta a los casos de uso. Cada caso de uso emite **después de guardar** (en las operaciones con transacción, después del commit), con un objeto plano que arma él mismo. Los listeners viven aparte, en `alerts/registerAlertListeners.js`: deciden qué decir y se lo pasan a un notificador (`notifications/`) con un contrato común, `notify({ subject, body })`. Cada listener atrapa sus propios errores: si un aviso falla, se registra en la consola y la operación responde igual.
