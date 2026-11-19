@@ -2,7 +2,7 @@
 ### Documentación interactiva: http://localhost:8000/api-docs
 ### Correrlos EN ORDEN con el servidor recién arrancado y los datos en la semilla: en memoria alcanza con reiniciar;
 ### en sequelize los datos sobreviven al reinicio, así que antes hay que parar el servidor y borrar database.sqlite.
-### Los 134 casos (del 0 al 133) dan lo mismo en los dos modos (PERSISTENCE_TYPE en .env).
+### Los 147 casos (del 0 al 146) dan lo mismo en los dos modos (PERSISTENCE_TYPE en .env).
 ### Los pedidos que escriben llevan el token que devuelve el caso 0: por eso hay que correr ese primero.
 ### El usuario y la contraseña del caso 0 son los del .env.example; si cambiaste los tuyos, cambialos ahí.
 ### Las órdenes que se crean valen hasta 2030-12-31: la regla 9 (la validez no puede ser anterior a hoy) no las vence.
@@ -1003,3 +1003,121 @@ Content-Type: application/json
 {
   "validaHasta": "2020-01-01"
 }
+
+### ===================== SEGURIDAD =====================
+### Leer es público; escribir exige el token del caso 0 en el header Authorization.
+### Un pedido rechazado que además tiene pinta de ataque (un token que no firmó este servidor, SQL o HTML inyectado,
+### un archivo que no es de la API) conserva su status y su code, y recibe un mensaje propio.
+### Los límites de pedidos (429) no tienen caso acá: dispararlos dejaría al resto de la colección sin poder correr.
+### Para verlos: seis inicios de sesión fallidos seguidos, o arrancar con RATE_LIMIT_MAX=5 y pedir seis veces lo que sea.
+
+### 134. Escribir sin token → 401 TOKEN_MISSING
+POST {{base}}/etiquetas
+Content-Type: application/json
+
+{
+  "nombre": "sin-token"
+}
+
+### 135. Escribir con un token que no firmó este servidor → 401 TOKEN_INVALID
+POST {{base}}/etiquetas
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJzdWIiOiJvcGVyYWRvciIsImV4cCI6OTk5OTk5OTk5OX0.
+
+{
+  "nombre": "token-trucho"
+}
+
+### 136. Iniciar sesión con la contraseña incorrecta → 401 INVALID_CREDENTIALS
+POST {{base}}/auth/login
+Content-Type: application/json
+
+{
+  "usuario": "operador",
+  "password": "no-es-esta"
+}
+
+### 137. Iniciar sesión con un usuario que no existe → 401 INVALID_CREDENTIALS (el mismo error: no dice cuál de los dos falló)
+POST {{base}}/auth/login
+Content-Type: application/json
+
+{
+  "usuario": "admin",
+  "password": "mellon-1234"
+}
+
+### 138. Iniciar sesión sin contraseña → 400 VALIDATION_ERROR
+POST {{base}}/auth/login
+Content-Type: application/json
+
+{
+  "usuario": "operador"
+}
+
+### 139. Inyección SQL en un id → 400 VALIDATION_ERROR (con el mensaje de las pruebas hostiles)
+GET {{base}}/activos/1%20OR%201=1
+
+### 140. Pedir un archivo que no es de la API → 404 ROUTE_NOT_FOUND (con el mensaje de las pruebas hostiles)
+GET {{base}}/.env
+
+### 141. Un id que no está escrito solo con dígitos → 400 VALIDATION_ERROR
+GET {{base}}/activos/0x1
+
+### 142. Nombre de más de 100 caracteres → 400 VALIDATION_ERROR
+POST {{base}}/activos
+Authorization: Bearer {{login.response.body.$.token}}
+Content-Type: application/json
+
+{
+  "ticker": "LARGO",
+  "nombre": "Un nombre que no termina nunca, que sigue y sigue y sigue y sigue y sigue y sigue y sigue y sigue y sigue y sigue",
+  "mercado": "NYSE",
+  "ratio": 1,
+  "nivel": "L1",
+  "topeCedears": 10
+}
+
+### 143. Nombre con un carácter invisible (U+202E, invierte el sentido de lectura) → 400 VALIDATION_ERROR
+POST {{base}}/activos
+Authorization: Bearer {{login.response.body.$.token}}
+Content-Type: application/json
+
+{
+  "ticker": "INVIS",
+  "nombre": "Co\u202EaloC",
+  "mercado": "NYSE",
+  "ratio": 1,
+  "nivel": "L1",
+  "topeCedears": 10
+}
+
+### 144. Precio por encima del tope de cordura → 400 VALIDATION_ERROR
+POST {{base}}/ordenes
+Authorization: Bearer {{login.response.body.$.token}}
+Content-Type: application/json
+
+{
+  "activoId": 1,
+  "sentido": "venta",
+  "cantidad": 1,
+  "precioLimite": 1e308,
+  "validaHasta": "2030-12-31"
+}
+
+### 145. SQL en un texto libre → 201: se guarda como texto, porque las consultas van parametrizadas
+# @name bobby
+POST {{base}}/activos
+Authorization: Bearer {{login.response.body.$.token}}
+Content-Type: application/json
+
+{
+  "ticker": "BOBBY",
+  "nombre": "Robert'); DROP TABLE activos;--",
+  "mercado": "NYSE",
+  "ratio": 1,
+  "nivel": "L1",
+  "topeCedears": 10
+}
+
+### 146. …y la tabla sigue ahí, con ese nombre adentro → 200
+GET {{base}}/activos/{{bobby.response.body.$.id}}
