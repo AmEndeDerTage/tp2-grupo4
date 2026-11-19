@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { TOPE_CERCA_PCT, CLOCK_NOW, JWT_SECRET, JWT_EXPIRES_IN, OPERADOR_USUARIO, OPERADOR_PASSWORD_HASH } from "../config/config.js";
+import { TOPE_CERCA_PCT, CLOCK_NOW, NODE_ENV, JWT_SECRET, JWT_EXPIRES_IN, OPERADOR_USUARIO, OPERADOR_PASSWORD_HASH } from "../config/config.js";
 import { getActivosDao, getOrdenesDao, getEtiquetasDao, getTransaccion } from "../dao/daoFactory.js";
 import makeActivoUseCases from "../usecases/activos/makeActivoUseCases.js";
 import ActivosController from "../controllers/ActivosController.js";
@@ -95,8 +95,12 @@ async function buildContainer() {
   router.use("/ordenes", createOrdenesRouter(ordenesController, auth));
   router.use("/etiquetas", createEtiquetasRouter(etiquetasController, auth));
 
-  // Documentación interactiva (OpenAPI + Swagger UI): un recurso HTTP más de la API
-  router.use("/api-docs", createDocsRouter());
+  // Documentación interactiva (OpenAPI + Swagger UI): un recurso HTTP más de la API. En producción no se publica.
+  if (NODE_ENV !== "production") {
+    router.use("/api-docs", createDocsRouter());
+  } else {
+    console.log("[Documentación] /api-docs apagada (NODE_ENV=production)");
+  }
 
   return router;
 }

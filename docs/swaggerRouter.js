@@ -35,7 +35,10 @@ function createDocsRouter() {
   // La especificación «cruda», para las herramientas que la consumen por su cuenta: Postman, por ejemplo, la importa
   // desde esta URL (Import → Link) y arma una colección con todos los pedidos. Un solo contrato para Swagger UI y Postman.
   router.get("/openapi.json", (req, res) => res.json(spec));
-  router.use("/", swaggerUi.serve, swaggerUi.setup(spec, { customSiteTitle: "API Activos y Órdenes — docs" }));
+  // Los archivos de Swagger UI (scripts, estilos) y la página, que se responde solo en la raíz: cualquier otra ruta
+  // debajo de /api-docs sigue de largo y termina en el 404 de siempre, en lugar de devolver la página.
+  router.use(swaggerUi.serve);
+  router.get("/", swaggerUi.setup(spec, { customSiteTitle: "API Activos y Órdenes — docs" }));
   return router;
 }
 
