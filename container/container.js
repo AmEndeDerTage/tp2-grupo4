@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { TOPE_CERCA_PCT, CLOCK_NOW } from "../config/config.js";
+import { TOPE_CERCA_PCT, CLOCK_NOW, JWT_SECRET, JWT_EXPIRES_IN, OPERADOR_USUARIO, OPERADOR_PASSWORD_HASH } from "../config/config.js";
 import { getActivosDao, getOrdenesDao, getEtiquetasDao, getTransaccion } from "../dao/daoFactory.js";
 import makeActivoUseCases from "../usecases/activos/makeActivoUseCases.js";
 import ActivosController from "../controllers/ActivosController.js";
@@ -17,6 +17,11 @@ import { getNotifier } from "../notifications/notifierFactory.js";
 import createMultiNotifier from "../notifications/multiNotifier.js";
 import registerAlertListeners from "../alerts/registerAlertListeners.js";
 import createClock from "../utils/clock.js";
+import createPasswordHasher from "../security/passwordHasher.js";
+import createTokenService from "../security/tokenService.js";
+import makeAuthUseCases from "../usecases/auth/makeAuthUseCases.js";
+import AuthController from "../controllers/AuthController.js";
+import createAuthRouter from "../routes/authRoutes.js";
 
 /**
  * Composition Root.
@@ -68,13 +73,21 @@ async function buildContainer() {
   const ordenUseCases = makeOrdenUseCases({ ordenesDao, activosDao, events, transaccion, topeCercaPct: TOPE_CERCA_PCT, clock });
   const etiquetaUseCases = makeEtiquetaUseCases({ etiquetasDao, activosDao, transaccion });
 
+  // Seguridad: el hasheador de contraseñas y el servicio de tokens, para el inicio de sesión.
+  // Las credenciales del operador llegan de la configuración; de la contraseña solo existe el hash.
+  const hasher = createPasswordHasher({ rounds: 10 });
+  const tokens = createTokenService({ secret: JWT_SECRET, expiresIn: JWT_EXPIRES_IN });
+  const authUseCases = makeAuthUseCases({ operador: { usuario: OPERADOR_USUARIO, passwordHash: OPERADOR_PASSWORD_HASH }, hasher, tokens });
+
   // 4. Controladores con los casos de uso inyectados
   const activosController = new ActivosController(activoUseCases);
   const ordenesController = new OrdenesController(ordenUseCases);
   const etiquetasController = new EtiquetasController(etiquetaUseCases);
+  const authController = new AuthController(authUseCases);
 
   // 5. Routers con los controladores inyectados, montados en el router principal
   const router = Router();
+  router.use("/auth", createAuthRouter(authController));
   router.use("/activos", createActivosRouter(activosController));
   router.use("/ordenes", createOrdenesRouter(ordenesController));
   router.use("/etiquetas", createEtiquetasRouter(etiquetasController));
