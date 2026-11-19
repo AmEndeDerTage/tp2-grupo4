@@ -1,4 +1,5 @@
 import AppError from "../errors/AppError.js";
+import { esPruebaHostil, MENSAJE_PRUEBA_HOSTIL } from "../security/pruebaHostil.js";
 
 // Errores del cliente que Express detecta antes de llegar a una ruta, por el status que trae el propio error
 const ERRORES_DEL_CLIENTE = {
@@ -14,21 +15,24 @@ const ERRORES_DEL_CLIENTE = {
  * como del cliente (trae un status 4xx) y, recién al final, el 500: lo que no es culpa de nadie más.
  */
 function errorHandler(err, req, res, next) {
+  const { status, error } = traducir(err);
+  if (status >= 500) console.error("Error no controlado:", err);
+
+  // Una prueba de vulnerabilidad recibe el mismo status y el mismo code que cualquier otro pedido rechazado; cambia solo el mensaje.
+  if (status < 500 && esPruebaHostil(error.code, req)) error.message = MENSAJE_PRUEBA_HOSTIL;
+
+  res.status(status).json({ error });
+}
+
+// Traduce cualquier error al status y al cuerpo que se responden
+function traducir(err) {
   if (err instanceof AppError) {
-    return res.status(err.statusCode).json({
-      error: {
-        code: err.code,
-        message: err.message,
-        ...(err.details && { details: err.details }),
-      },
-    });
+    return { status: err.statusCode, error: { code: err.code, message: err.message, ...(err.details && { details: err.details }) } };
   }
 
   // JSON mal formado en el body: lo detecta express.json() antes de llegar a Zod. Es un 400, no un 500.
   if (err.type === "entity.parse.failed") {
-    return res.status(400).json({
-      error: { code: "INVALID_JSON", message: "El cuerpo de la petición no es un JSON válido" },
-    });
+    return { status: 400, error: { code: "INVALID_JSON", message: "El cuerpo de la petición no es un JSON válido" } };
   }
 
   // Otros errores que Express o express.json() ya marcan como del cliente: cuerpo más grande que el límite de
@@ -36,14 +40,10 @@ function errorHandler(err, req, res, next) {
   // un 500 diría «falló el servidor» cuando lo que falló fue el pedido.
   const status = err.status ?? err.statusCode;
   if (Number.isInteger(status) && status >= 400 && status < 500) {
-    const { code, message } = ERRORES_DEL_CLIENTE[status] ?? ERRORES_DEL_CLIENTE[400];
-    return res.status(status).json({ error: { code, message } });
+    return { status, error: { ...(ERRORES_DEL_CLIENTE[status] ?? ERRORES_DEL_CLIENTE[400]) } };
   }
 
-  console.error("Error no controlado:", err);
-  res.status(500).json({
-    error: { code: "INTERNAL_ERROR", message: "Ocurrió un error inesperado en el servidor" },
-  });
+  return { status: 500, error: { code: "INTERNAL_ERROR", message: "Ocurrió un error inesperado en el servidor" } };
 }
 
 export default errorHandler;
