@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: API Activos y Órdenes
-  version: 1.1.0
+  version: 1.2.0
   description: |
     API REST en capas (Express + Node) sobre un recorte **hipotético** de un sistema de inversiones en CEDEARs.
     Un **Activo** es un CEDEAR seguido por el sistema (nivel de seguimiento, cantidad en cartera y tope permitido).
@@ -26,6 +26,17 @@ info:
     y **400** `BAD_REQUEST` (URL mal codificada). El **500** queda para lo que no es un error del pedido.
     La persistencia (`memory` | `sequelize`) se elige por variable de entorno y no cambia las respuestas.
 
+    **Seguridad.** Leer es público; **todo pedido que escribe exige un token**. Se obtiene en `POST /auth/login` con el
+    usuario y la contraseña del operador, vale `JWT_EXPIRES_IN` (1 h por defecto) y viaja en el header
+    `Authorization: Bearer <token>`: en esta página, botón **Authorize**. Sin token, o con uno vencido o que este
+    servidor no firmó, la respuesta es **401**. Hay dos límites de pedidos por IP y por minuto, que responden **429**:
+    uno general (`RATE_LIMIT_MAX`, 1000) y uno de inicios de sesión fallidos (`LOGIN_RATE_LIMIT_MAX`, 5); las
+    cabeceras `RateLimit` y `RateLimit-Policy` de cada respuesta dicen cuánto queda. Los textos libres no admiten
+    caracteres de control ni invisibles, y los números tienen topes de cordura.
+    Un pedido rechazado (4xx) que además tiene pinta de ataque (un token que no firmó este servidor, SQL o HTML
+    inyectado, un archivo que no es de la API, un límite superado) **conserva su status y su `code`**; lo único
+    que cambia es el `message`.
+
     **Eventos de dominio** (no cambian ninguna respuesta: son avisos que salen después de guardar). Crear una orden
     emite `orden.creada`, que imprime la «tabla para colocar a mano» por consola o la agrega al archivo
     (`NOTIFIER_TYPE`). Crear una compra, o editar su cantidad, emite `activo.topeCerca` cuando cartera + compras
@@ -45,6 +56,8 @@ servers:
     description: Este mismo servidor (mismo host y puerto que esta página)
 
 tags:
+  - name: Autenticación
+    description: Inicio de sesión del operador. El token que devuelve es el que exigen los pedidos que escriben
   - name: Activos
     description: CEDEARs seguidos por el sistema
   - name: Órdenes
@@ -53,6 +66,52 @@ tags:
     description: Rótulos para agrupar activos (relación N:N con la tabla intermedia activo_etiquetas)
 
 paths:
+  /auth/login:
+    post:
+      tags: [Autenticación]
+      summary: Iniciar sesión
+      description: |
+        Devuelve un token JWT para usar en los pedidos que escriben (`Authorization: Bearer <token>`).
+        Si el usuario o la contraseña no coinciden, el error es el mismo en los dos casos: la respuesta no dice cuál falló.
+        Después de `LOGIN_RATE_LIMIT_MAX` intentos fallidos en un minuto (5 por defecto), responde 429 hasta que pase el minuto.
+      operationId: iniciarSesion
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Credenciales"
+            example: { usuario: operador, password: mellon-1234 }
+      responses:
+        "200":
+          description: Sesión iniciada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Sesion"
+              example:
+                token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJvcGVyYWRvciIsImlhdCI6MTc5NTA0ODg4NywiZXhwIjoxNzk1MDUyNDg3fQ.firma
+                tipo: Bearer
+                expiraEn: 1h
+        "400":
+          $ref: "#/components/responses/ErrorEntrada"
+        "401":
+          description: Usuario o contraseña incorrectos
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                error: { code: INVALID_CREDENTIALS, message: Usuario o contraseña incorrectos }
+        "413":
+          $ref: "#/components/responses/CuerpoDemasiadoGrande"
+        "415":
+          $ref: "#/components/responses/TipoNoSoportado"
+        "429":
+          $ref: "#/components/responses/DemasiadosPedidos"
+        "500":
+          $ref: "#/components/responses/ErrorInterno"
+
   /activos:
     get:
       tags: [Activos]
@@ -118,6 +177,8 @@ paths:
                   - { id: 3, ticker: GGAL, nombre: Grupo Financiero Galicia, mercado: BYMA, ratio: 1, nivel: L1, cantidad: 0, topeCedears: 50, etiquetas: [{ id: 4, nombre: argentina }] }
         "400":
           $ref: "#/components/responses/ErrorValidacion"
+        "429":
+          $ref: "#/components/responses/DemasiadosPedidos"
         "500":
           $ref: "#/components/responses/ErrorInterno"
     post:
@@ -129,6 +190,8 @@ paths:
         verificación que al editar el activo) · todas las etiquetas tienen que existir (404, con las que faltan en
         `details`). Si algo falla, el activo no queda creado.
       operationId: crearActivo
+      security:
+        - bearerAuth: []
       requestBody:
         required: true
         content:
@@ -170,6 +233,8 @@ paths:
                   value: { id: 4, ticker: PG, nombre: Procter & Gamble, mercado: NYSE, ratio: 15, nivel: L1, cantidad: 0, topeCedears: 20, etiquetas: [{ id: 1, nombre: dividendos }, { id: 3, nombre: defensivo }] }
         "400":
           $ref: "#/components/responses/ErrorEntrada"
+        "401":
+          $ref: "#/components/responses/NoAutenticado"
         "404":
           description: Alguna de las etiquetas no existe; el activo no se creó
           content:
@@ -203,6 +268,8 @@ paths:
           $ref: "#/components/responses/CuerpoDemasiadoGrande"
         "415":
           $ref: "#/components/responses/TipoNoSoportado"
+        "429":
+          $ref: "#/components/responses/DemasiadosPedidos"
         "500":
           $ref: "#/components/responses/ErrorInterno"
 
@@ -225,6 +292,8 @@ paths:
           $ref: "#/components/responses/ErrorValidacion"
         "404":
           $ref: "#/components/responses/ActivoNoEncontrado"
+        "429":
+          $ref: "#/components/responses/DemasiadosPedidos"
         "500":
           $ref: "#/components/responses/ErrorInterno"
     put:
@@ -238,6 +307,8 @@ paths:
         Si el cambio toca `cantidad` o `topeCedears` y lo comprometido llega a `TOPE_CERCA_PCT` % del tope, emite `activo.topeCerca`.
         Las etiquetas no se cambian acá, sino con `POST`/`DELETE /activos/{id}/etiquetas/{etiquetaId}`.
       operationId: actualizarActivo
+      security:
+        - bearerAuth: []
       requestBody:
         required: true
         content:
@@ -261,6 +332,8 @@ paths:
               example: { id: 3, ticker: GGAL, nombre: Grupo Financiero Galicia, mercado: BYMA, ratio: 1, nivel: L2, cantidad: 0, topeCedears: 50, etiquetas: [{ id: 4, nombre: argentina }] }
         "400":
           $ref: "#/components/responses/ErrorEntrada"
+        "401":
+          $ref: "#/components/responses/NoAutenticado"
         "404":
           $ref: "#/components/responses/ActivoNoEncontrado"
         "409":
@@ -286,6 +359,8 @@ paths:
           $ref: "#/components/responses/CuerpoDemasiadoGrande"
         "415":
           $ref: "#/components/responses/TipoNoSoportado"
+        "429":
+          $ref: "#/components/responses/DemasiadosPedidos"
         "500":
           $ref: "#/components/responses/ErrorInterno"
     delete:
@@ -293,11 +368,15 @@ paths:
       summary: Eliminar un activo
       description: Solo si no tiene órdenes, ni vivas ni ejecutadas (regla 8). Se lleva sus vínculos con etiquetas.
       operationId: eliminarActivo
+      security:
+        - bearerAuth: []
       responses:
         "204":
           description: Eliminado (sin cuerpo)
         "400":
           $ref: "#/components/responses/ErrorValidacion"
+        "401":
+          $ref: "#/components/responses/NoAutenticado"
         "404":
           $ref: "#/components/responses/ActivoNoEncontrado"
         "409":
@@ -308,6 +387,8 @@ paths:
                 $ref: "#/components/schemas/Error"
               example:
                 error: { code: ACTIVO_CON_ORDENES, "message": "No se puede eliminar el activo 1: tiene 2 orden(es) asociada(s)" }
+        "429":
+          $ref: "#/components/responses/DemasiadosPedidos"
         "500":
           $ref: "#/components/responses/ErrorInterno"
 
@@ -342,6 +423,8 @@ paths:
           $ref: "#/components/responses/ErrorValidacion"
         "404":
           $ref: "#/components/responses/ActivoNoEncontrado"
+        "429":
+          $ref: "#/components/responses/DemasiadosPedidos"
         "500":
           $ref: "#/components/responses/ErrorInterno"
 
@@ -365,6 +448,8 @@ paths:
           $ref: "#/components/responses/ErrorValidacion"
         "404":
           $ref: "#/components/responses/ActivoNoEncontrado"
+        "429":
+          $ref: "#/components/responses/DemasiadosPedidos"
         "500":
           $ref: "#/components/responses/ErrorInterno"
 
@@ -389,6 +474,8 @@ paths:
           $ref: "#/components/responses/ErrorValidacion"
         "404":
           $ref: "#/components/responses/VinculoNoEncontrado"
+        "429":
+          $ref: "#/components/responses/DemasiadosPedidos"
         "500":
           $ref: "#/components/responses/ErrorInterno"
     post:
@@ -396,6 +483,8 @@ paths:
       summary: Asignarle una etiqueta a un activo (crear el vínculo)
       description: Sin body. En una transacción; dos asignaciones simultáneas iguales dan 201 y 409, en los dos modos.
       operationId: asignarEtiqueta
+      security:
+        - bearerAuth: []
       responses:
         "201":
           description: Vínculo creado; devuelve las etiquetas del activo después del cambio. `Location` = la URL del vínculo, `/activos/{id}/etiquetas/{etiquetaId}`
@@ -409,6 +498,8 @@ paths:
               example: [{ id: 1, nombre: dividendos }, { id: 2, nombre: tecnologia }]
         "400":
           $ref: "#/components/responses/ErrorValidacion"
+        "401":
+          $ref: "#/components/responses/NoAutenticado"
         "404":
           description: No existe el activo o la etiqueta
           content:
@@ -430,6 +521,8 @@ paths:
                 $ref: "#/components/schemas/Error"
               example:
                 error: { code: ETIQUETA_YA_ASIGNADA, message: El activo AAPL ya tiene la etiqueta dividendos }
+        "429":
+          $ref: "#/components/responses/DemasiadosPedidos"
         "500":
           $ref: "#/components/responses/ErrorInterno"
     delete:
@@ -437,13 +530,19 @@ paths:
       summary: Quitarle una etiqueta a un activo (borrar el vínculo)
       description: La etiqueta sigue existiendo; solo se borra el vínculo.
       operationId: quitarEtiqueta
+      security:
+        - bearerAuth: []
       responses:
         "204":
           description: Vínculo borrado (sin cuerpo)
         "400":
           $ref: "#/components/responses/ErrorValidacion"
+        "401":
+          $ref: "#/components/responses/NoAutenticado"
         "404":
           $ref: "#/components/responses/VinculoNoEncontrado"
+        "429":
+          $ref: "#/components/responses/DemasiadosPedidos"
         "500":
           $ref: "#/components/responses/ErrorInterno"
 
@@ -482,6 +581,8 @@ paths:
                   - { id: 3, activoId: 2, sentido: compra, cantidad: 10, precioLimite: 12.5, validaHasta: "2026-11-27", estado: viva, motivo: null, activo: { id: 2, ticker: AAPL } }
         "400":
           $ref: "#/components/responses/ErrorValidacion"
+        "429":
+          $ref: "#/components/responses/DemasiadosPedidos"
         "500":
           $ref: "#/components/responses/ErrorInterno"
     post:
@@ -500,6 +601,8 @@ paths:
         Después de guardar emite `orden.creada` (tabla para colocar a mano) y, si es una compra que deja lo
         comprometido en `TOPE_CERCA_PCT` % o más del tope, `activo.topeCerca`. Un aviso que falla no cambia la respuesta.
       operationId: crearOrden
+      security:
+        - bearerAuth: []
       requestBody:
         required: true
         content:
@@ -535,6 +638,8 @@ paths:
               example: { id: 4, activoId: 2, sentido: compra, cantidad: 5, precioLimite: 12, validaHasta: "2030-12-31", estado: viva, motivo: Segunda tanda de compra, activo: { id: 2, ticker: AAPL } }
         "400":
           $ref: "#/components/responses/ErrorEntrada"
+        "401":
+          $ref: "#/components/responses/NoAutenticado"
         "404":
           $ref: "#/components/responses/ActivoNoEncontrado"
         "409":
@@ -563,6 +668,8 @@ paths:
           $ref: "#/components/responses/CuerpoDemasiadoGrande"
         "415":
           $ref: "#/components/responses/TipoNoSoportado"
+        "429":
+          $ref: "#/components/responses/DemasiadosPedidos"
         "500":
           $ref: "#/components/responses/ErrorInterno"
 
@@ -585,6 +692,8 @@ paths:
           $ref: "#/components/responses/ErrorValidacion"
         "404":
           $ref: "#/components/responses/OrdenNoEncontrada"
+        "429":
+          $ref: "#/components/responses/DemasiadosPedidos"
         "500":
           $ref: "#/components/responses/ErrorInterno"
     put:
@@ -598,6 +707,8 @@ paths:
         Si el cambio incluye la `cantidad` de una compra y lo comprometido llega a `TOPE_CERCA_PCT` % del tope,
         emite `activo.topeCerca`; editar solo precio, fecha o motivo no avisa.
       operationId: actualizarOrden
+      security:
+        - bearerAuth: []
       requestBody:
         required: true
         content:
@@ -621,6 +732,8 @@ paths:
               example: { id: 1, activoId: 1, sentido: venta, cantidad: 10, precioLimite: 71, validaHasta: "2026-11-30", estado: viva, motivo: Toma parcial de ganancia, activo: { id: 1, ticker: KO } }
         "400":
           $ref: "#/components/responses/ErrorEntrada"
+        "401":
+          $ref: "#/components/responses/NoAutenticado"
         "404":
           $ref: "#/components/responses/OrdenNoEncontrada"
         "409":
@@ -649,17 +762,23 @@ paths:
           $ref: "#/components/responses/CuerpoDemasiadoGrande"
         "415":
           $ref: "#/components/responses/TipoNoSoportado"
+        "429":
+          $ref: "#/components/responses/DemasiadosPedidos"
         "500":
           $ref: "#/components/responses/ErrorInterno"
     delete:
       tags: [Órdenes]
       summary: Borrar una orden viva (es la forma de cancelarla)
       operationId: eliminarOrden
+      security:
+        - bearerAuth: []
       responses:
         "204":
           description: Eliminada (sin cuerpo)
         "400":
           $ref: "#/components/responses/ErrorValidacion"
+        "401":
+          $ref: "#/components/responses/NoAutenticado"
         "404":
           $ref: "#/components/responses/OrdenNoEncontrada"
         "409":
@@ -670,6 +789,8 @@ paths:
                 $ref: "#/components/schemas/Error"
               example:
                 error: { code: ORDEN_NO_MODIFICABLE, "message": "La orden 2 ya está ejecutada: no se puede borrar" }
+        "429":
+          $ref: "#/components/responses/DemasiadosPedidos"
         "500":
           $ref: "#/components/responses/ErrorInterno"
 
@@ -686,6 +807,8 @@ paths:
         Reglas: **7** una orden ejecutada no se vuelve a ejecutar · **5** en una venta, lo vendido tiene que estar en cartera.
         Sin cuerpo. Emite `orden.ejecutada` después de confirmar; no emite `activo.topeCerca` (lo comprometido no sube).
       operationId: ejecutarOrden
+      security:
+        - bearerAuth: []
       responses:
         "200":
           description: Orden ejecutada, con el resumen de su activo (el activo ajustado se ve con GET /activos/{id})
@@ -696,6 +819,8 @@ paths:
               example: { id: 3, activoId: 2, sentido: compra, cantidad: 10, precioLimite: 12.5, validaHasta: "2026-11-27", estado: ejecutada, motivo: null, activo: { id: 2, ticker: AAPL } }
         "400":
           $ref: "#/components/responses/ErrorValidacion"
+        "401":
+          $ref: "#/components/responses/NoAutenticado"
         "404":
           $ref: "#/components/responses/OrdenNoEncontrada"
         "409":
@@ -711,6 +836,8 @@ paths:
                 cantidadInsuficiente:
                   summary: Regla 5 — la cartera no alcanza para la venta
                   value: { error: { code: CANTIDAD_INSUFICIENTE, "message": "No se puede ejecutar la venta 6 de 5 KO: hay 3 en cartera" } }
+        "429":
+          $ref: "#/components/responses/DemasiadosPedidos"
         "500":
           $ref: "#/components/responses/ErrorInterno"
 
@@ -742,6 +869,8 @@ paths:
                   - { id: 5, nombre: energia }
         "400":
           $ref: "#/components/responses/ErrorValidacion"
+        "429":
+          $ref: "#/components/responses/DemasiadosPedidos"
         "500":
           $ref: "#/components/responses/ErrorInterno"
     post:
@@ -749,6 +878,8 @@ paths:
       summary: Crear una etiqueta
       description: El nombre se normaliza (sin espacios alrededor, en minúsculas) y tiene que ser único.
       operationId: crearEtiqueta
+      security:
+        - bearerAuth: []
       requestBody:
         required: true
         content:
@@ -769,12 +900,16 @@ paths:
               example: { id: 6, nombre: renta-fija }
         "400":
           $ref: "#/components/responses/ErrorEntrada"
+        "401":
+          $ref: "#/components/responses/NoAutenticado"
         "409":
           $ref: "#/components/responses/EtiquetaDuplicada"
         "413":
           $ref: "#/components/responses/CuerpoDemasiadoGrande"
         "415":
           $ref: "#/components/responses/TipoNoSoportado"
+        "429":
+          $ref: "#/components/responses/DemasiadosPedidos"
         "500":
           $ref: "#/components/responses/ErrorInterno"
 
@@ -797,6 +932,8 @@ paths:
           $ref: "#/components/responses/ErrorValidacion"
         "404":
           $ref: "#/components/responses/EtiquetaNoEncontrada"
+        "429":
+          $ref: "#/components/responses/DemasiadosPedidos"
         "500":
           $ref: "#/components/responses/ErrorInterno"
     put:
@@ -804,6 +941,8 @@ paths:
       summary: Renombrar una etiqueta
       description: Como los activos la referencian por id, renombrarla la renombra en todos.
       operationId: actualizarEtiqueta
+      security:
+        - bearerAuth: []
       requestBody:
         required: true
         content:
@@ -821,6 +960,8 @@ paths:
               example: { id: 6, nombre: bonos }
         "400":
           $ref: "#/components/responses/ErrorEntrada"
+        "401":
+          $ref: "#/components/responses/NoAutenticado"
         "404":
           $ref: "#/components/responses/EtiquetaNoEncontrada"
         "409":
@@ -829,6 +970,8 @@ paths:
           $ref: "#/components/responses/CuerpoDemasiadoGrande"
         "415":
           $ref: "#/components/responses/TipoNoSoportado"
+        "429":
+          $ref: "#/components/responses/DemasiadosPedidos"
         "500":
           $ref: "#/components/responses/ErrorInterno"
     delete:
@@ -838,17 +981,29 @@ paths:
         Una etiqueta en uso se borra igual: en una transacción se quitan sus vínculos y se borra la etiqueta.
         Un vínculo es una clasificación, no historia (a diferencia de las órdenes de la regla 8).
       operationId: eliminarEtiqueta
+      security:
+        - bearerAuth: []
       responses:
         "204":
           description: Eliminada (sin cuerpo)
         "400":
           $ref: "#/components/responses/ErrorValidacion"
+        "401":
+          $ref: "#/components/responses/NoAutenticado"
         "404":
           $ref: "#/components/responses/EtiquetaNoEncontrada"
+        "429":
+          $ref: "#/components/responses/DemasiadosPedidos"
         "500":
           $ref: "#/components/responses/ErrorInterno"
 
 components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: El token que devuelve `POST /auth/login`. Pegarlo acá sin la palabra «Bearer».
   parameters:
     ActivoId:
       name: id
@@ -956,11 +1111,11 @@ components:
                   code: VALIDATION_ERROR
                   message: Datos de params inválidos
                   details:
-                    - { field: id, message: El id debe ser un número }
+                    - { field: id, message: El id debe ser un número entero positivo }
             urlMalCodificada:
               summary: La URL no se puede decodificar (p. ej. /activos/%E0%A4%A)
               value:
-                error: { code: BAD_REQUEST, message: La petición no se pudo interpretar }
+                error: { code: BAD_REQUEST, message: "Osvaldo Ojeda: you shall not pass!" }
     ErrorEntrada:
       description: |
         Pedido inválido. Tres causas, con el mismo formato de error: datos que no cumplen el schema
@@ -986,7 +1141,7 @@ components:
             urlMalCodificada:
               summary: La URL no se puede decodificar
               value:
-                error: { code: BAD_REQUEST, message: La petición no se pudo interpretar }
+                error: { code: BAD_REQUEST, message: "Osvaldo Ojeda: you shall not pass!" }
     CuerpoDemasiadoGrande:
       description: El cuerpo supera el tamaño máximo que acepta `express.json()` (100 kb). Lo corta Express antes de llegar a la ruta.
       content:
@@ -994,7 +1149,7 @@ components:
           schema:
             $ref: "#/components/schemas/Error"
           example:
-            error: { code: PAYLOAD_TOO_LARGE, message: El cuerpo de la petición supera el tamaño máximo permitido }
+            error: { code: PAYLOAD_TOO_LARGE, message: "Osvaldo Ojeda: you shall not pass!" }
     TipoNoSoportado:
       description: El `charset` del `Content-Type` o la compresión (`Content-Encoding`) del cuerpo no están soportados.
       content:
@@ -1002,7 +1157,7 @@ components:
           schema:
             $ref: "#/components/schemas/Error"
           example:
-            error: { code: UNSUPPORTED_MEDIA_TYPE, message: El formato o la codificación del cuerpo no están soportados }
+            error: { code: UNSUPPORTED_MEDIA_TYPE, message: "Osvaldo Ojeda: you shall not pass!" }
     ActivoNoEncontrado:
       description: No existe un activo con ese id
       content:
@@ -1052,6 +1207,44 @@ components:
             $ref: "#/components/schemas/Error"
           example:
             error: { code: ETIQUETA_DUPLICADA, message: Ya existe una etiqueta con el nombre dividendos }
+    NoAutenticado:
+      description: |
+        El pedido escribe y no trae un token válido en `Authorization: Bearer <token>` (se obtiene en `POST /auth/login`).
+        Se verifica antes que el cuerpo y los parámetros: sin token, un pedido mal formado también responde 401.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          examples:
+            sinToken:
+              summary: Falta el header Authorization
+              value:
+                error: { code: TOKEN_MISSING, message: "Falta el header Authorization: Bearer <token> (se obtiene en POST /auth/login)" }
+            tokenVencido:
+              summary: El token venció
+              value:
+                error: { code: TOKEN_EXPIRED, message: "El token venció: hay que iniciar sesión de nuevo" }
+            tokenInvalido:
+              summary: El token no lo firmó este servidor (o fue modificado)
+              value:
+                error: { code: TOKEN_INVALID, message: "Osvaldo Ojeda: you shall not pass!" }
+    DemasiadosPedidos:
+      description: |
+        Se superó un límite de pedidos por IP y por minuto: el general (`TOO_MANY_REQUESTS`) o, en el inicio de sesión,
+        el de intentos fallidos (`TOO_MANY_ATTEMPTS`). Hay que esperar a que termine el minuto.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          examples:
+            general:
+              summary: Demasiados pedidos a la API
+              value:
+                error: { code: TOO_MANY_REQUESTS, message: "Osvaldo Ojeda: you shall not pass!" }
+            login:
+              summary: Demasiados inicios de sesión fallidos
+              value:
+                error: { code: TOO_MANY_ATTEMPTS, message: "Osvaldo Ojeda: you shall not pass!" }
     ErrorInterno:
       description: |
         Error no previsto (una falla de la base, un bug). No es una regla de negocio: el detalle queda en la
@@ -1064,6 +1257,35 @@ components:
             error: { code: INTERNAL_ERROR, message: Ocurrió un error inesperado en el servidor }
 
   schemas:
+    Credenciales:
+      type: object
+      description: Cuerpo de `POST /auth/login`
+      required: [usuario, password]
+      properties:
+        usuario:
+          type: string
+          minLength: 1
+          maxLength: 50
+          example: operador
+        password:
+          type: string
+          minLength: 1
+          maxLength: 72
+          example: mellon-1234
+    Sesion:
+      type: object
+      required: [token, tipo, expiraEn]
+      properties:
+        token:
+          type: string
+          description: JWT firmado. Su contenido se puede leer (no es secreto); lo que no se puede es modificarlo
+        tipo:
+          type: string
+          enum: [Bearer]
+        expiraEn:
+          type: string
+          description: Cuánto vale el token desde que se emite
+          example: 1h
     Mercado:
       type: string
       enum: [NYSE, NASDAQ, BYMA]
@@ -1090,12 +1312,14 @@ components:
           example: KO
         nombre:
           type: string
+          maxLength: 100
           example: Coca-Cola
         mercado:
           $ref: "#/components/schemas/Mercado"
         ratio:
           type: number
           minimum: 0
+          maximum: 1000000
           exclusiveMinimum: true
           description: CEDEARs por acción del subyacente (en BYMA, 1)
           example: 5
@@ -1104,11 +1328,13 @@ components:
         cantidad:
           type: integer
           minimum: 0
+          maximum: 1000000000
           description: CEDEARs en cartera
           example: 40
         topeCedears:
           type: integer
           minimum: 1
+          maximum: 1000000000
           description: Máximo de CEDEARs permitido para este activo
           example: 100
         etiquetas:
@@ -1126,6 +1352,7 @@ components:
           example: MSFT
         nombre:
           type: string
+          maxLength: 100
           minLength: 1
           example: Microsoft
         mercado:
@@ -1133,6 +1360,7 @@ components:
         ratio:
           type: number
           minimum: 0
+          maximum: 1000000
           exclusiveMinimum: true
           example: 30
         nivel:
@@ -1140,10 +1368,12 @@ components:
         cantidad:
           type: integer
           minimum: 0
+          maximum: 1000000000
           default: 0
         topeCedears:
           type: integer
           minimum: 1
+          maximum: 1000000000
           example: 60
         etiquetaIds:
           type: array
@@ -1167,21 +1397,25 @@ components:
           pattern: '^[A-Z][A-Z0-9.]{0,9}$'
         nombre:
           type: string
+          maxLength: 100
           minLength: 1
         mercado:
           $ref: "#/components/schemas/Mercado"
         ratio:
           type: number
           minimum: 0
+          maximum: 1000000
           exclusiveMinimum: true
         nivel:
           $ref: "#/components/schemas/Nivel"
         cantidad:
           type: integer
           minimum: 0
+          maximum: 1000000000
         topeCedears:
           type: integer
           minimum: 1
+          maximum: 1000000000
 
     ListadoActivos:
       type: object
@@ -1241,11 +1475,13 @@ components:
         cantidad:
           type: integer
           minimum: 1
+          maximum: 1000000000
           description: CEDEARs a comprar o vender
           example: 10
         precioLimite:
           type: number
           minimum: 0
+          maximum: 1000000000
           exclusiveMinimum: true
           description: Precio límite en US$ por CEDEAR
           example: 70
@@ -1278,10 +1514,12 @@ components:
         cantidad:
           type: integer
           minimum: 1
+          maximum: 1000000000
           example: 5
         precioLimite:
           type: number
           minimum: 0
+          maximum: 1000000000
           exclusiveMinimum: true
           example: 12
         validaHasta:
@@ -1301,9 +1539,11 @@ components:
         cantidad:
           type: integer
           minimum: 1
+          maximum: 1000000000
         precioLimite:
           type: number
           minimum: 0
+          maximum: 1000000000
           exclusiveMinimum: true
         validaHasta:
           type: string
