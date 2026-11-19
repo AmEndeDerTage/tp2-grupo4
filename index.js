@@ -1,5 +1,6 @@
 import express from "express";
 import logger from "./middlewares/logger.js";
+import cabeceras from "./middlewares/cabeceras.js";
 import notFound from "./middlewares/notFound.js";
 import errorHandler from "./middlewares/errorHandler.js";
 import { PORT, PERSISTENCE_TYPE } from "./config/config.js";
@@ -10,8 +11,9 @@ import buildContainer from "./container/container.js";
 async function startServer() {
   const app = express();
 
-  // Middlewares globales
+  // Middlewares globales, en este orden: registrar el pedido, poner las cabeceras de seguridad y, recién entonces, leer el cuerpo
   app.use(logger);
+  app.use(cabeceras);
   app.use(express.json());
 
   // El Composition Root arma todas las dependencias y devuelve el router principal
