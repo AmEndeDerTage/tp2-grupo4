@@ -1,6 +1,7 @@
 import AppError from "../../errors/AppError.js";
 import EVENTS from "../../events/eventNames.js";
 import {
+  verificarValidez,
   obtenerActivoDeLaOrden,
   ordenesVivasDelMismoLado,
   verificarNoDuplicada,
@@ -14,6 +15,7 @@ import {
  * Reglas, en este orden:
  *   7. una orden ejecutada no se modifica                         → ORDEN_NO_MODIFICABLE (409)
  *   1. el activo de la orden existe (lo garantiza la regla 8; se verifica igual, porque las reglas siguientes lo usan)
+ *   9. si cambia la validez, no es anterior a hoy                  → VALIDEZ_VENCIDA (409)
  *   3. si cambia el precio, no duplica otra orden viva             → ORDEN_DUPLICADA (409)
  *   5/6. si cambia la cantidad, entra en lo disponible             → CANTIDAD_INSUFICIENTE / TOPE_EXCEDIDO (409)
  * En 3, 5 y 6 la propia orden no se cuenta (excluirId): si no, se compararía consigo misma.
@@ -26,13 +28,17 @@ import {
  * La regla 7 también queda protegida: una ejecución simultánea no puede colarse entre la lectura y la escritura.
  * El umbral `topeCercaPct` llega inyectado desde el container (clase 13), como en createOrden.
  */
-async function updateOrden(id, cambios, ordenesDao, activosDao, events, transaccion, topeCercaPct) {
+async function updateOrden(id, cambios, ordenesDao, activosDao, events, transaccion, topeCercaPct, clock) {
   const resultado = await transaccion(async (tx) => {
     const orden = await ordenesDao.getById(id, tx);
     if (!orden) return null;
 
     if (orden.estado === "ejecutada") {
       throw new AppError("ORDEN_NO_MODIFICABLE", `La orden ${orden.id} ya está ejecutada: no se puede modificar`, 409);
+    }
+
+    if (cambios.validaHasta !== undefined) {
+      verificarValidez(cambios.validaHasta, clock.today());
     }
 
     const activo = await obtenerActivoDeLaOrden(orden.activoId, activosDao, tx);

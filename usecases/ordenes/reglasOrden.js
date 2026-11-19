@@ -25,6 +25,17 @@ async function obtenerActivoDeLaOrden(activoId, activosDao, tx) {
 }
 
 /**
+ * Regla 9: la validez de una orden no puede ser anterior a hoy (VALIDEZ_VENCIDA, 409): no tiene sentido armar una
+ * orden que ya venció. `hoy` llega por parámetro (el caso de uso se lo pide al reloj inyectado): la función es pura.
+ * Las dos fechas son textos AAAA-MM-DD, que ordenados como texto quedan ordenados como fechas.
+ */
+function verificarValidez(validaHasta, hoy) {
+  if (validaHasta < hoy) {
+    throw new AppError("VALIDEZ_VENCIDA", `La orden no puede ser válida hasta el ${validaHasta}: hoy es ${hoy}`, 409);
+  }
+}
+
+/**
  * Las órdenes VIVAS del mismo activo y sentido, sin contar `excluirId` (la propia orden, al editarla).
  * Es la base de las reglas 3, 5 y 6: lo ya ejecutado está en `activo.cantidad`; lo vivo es lo comprometido.
  */
@@ -187,6 +198,7 @@ function nivelTrasEjecucion(activo, orden) {
 
 export {
   NIVELES_COMPRABLES,
+  verificarValidez,
   obtenerActivoDeLaOrden,
   ordenesVivasDelMismoLado,
   verificarNivelOperable,

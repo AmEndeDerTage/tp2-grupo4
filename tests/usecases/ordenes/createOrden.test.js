@@ -142,6 +142,33 @@ describe("regla 6 — una compra no puede pasar el tope (cartera + compras vivas
   });
 });
 
+describe("regla 9 — la validez de una orden no puede ser anterior a hoy (reloj inyectado)", () => {
+  // El reloj del test marca el 18/11/2026
+  const escenario = () => crearEscenario({ activos: [unActivo({ nivel: "L2", cantidad: 0 })], hoy: "2026-11-18" });
+
+  it("feliz: válida hasta mañana", async () => {
+    await expect(escenario().ordenes.createOrden(pedidoDeOrden({ validaHasta: "2026-11-19" }))).resolves.toMatchObject({ validaHasta: "2026-11-19" });
+  });
+
+  it("borde: válida hasta hoy mismo", async () => {
+    await expect(escenario().ordenes.createOrden(pedidoDeOrden({ validaHasta: "2026-11-18" }))).resolves.toMatchObject({ validaHasta: "2026-11-18" });
+  });
+
+  it("la viola: válida hasta ayer → 409 VALIDEZ_VENCIDA y el estado no cambió", async () => {
+    const esc = escenario();
+    const antes = await estado(esc);
+
+    await expect(esc.ordenes.createOrden(pedidoDeOrden({ validaHasta: "2026-11-17" }))).rejects.toMatchObject({ code: "VALIDEZ_VENCIDA", statusCode: 409 });
+    expect(await estado(esc)).toEqual(antes);
+    expect(esc.events.emit).not.toHaveBeenCalled();
+  });
+
+  it("la misma orden con otro reloj: si hoy es el 17, la del 17 entra", async () => {
+    const esc = crearEscenario({ activos: [unActivo({ nivel: "L2", cantidad: 0 })], hoy: "2026-11-17" });
+    await expect(esc.ordenes.createOrden(pedidoDeOrden({ validaHasta: "2026-11-17" }))).resolves.toMatchObject({ estado: "viva" });
+  });
+});
+
 describe("activo.topeCerca — el umbral llega inyectado (topeCercaPct)", () => {
   // Tope 30 y una compra viva de 10: comprar 5 deja lo comprometido en 15 de 30 (50 %)
   const escenario = (topeCercaPct) =>

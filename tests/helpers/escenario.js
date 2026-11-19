@@ -14,15 +14,18 @@ import makeEtiquetaUseCases from "../../usecases/etiquetas/makeEtiquetaUseCases.
  *  - `transaccion` es la de memoria (corre el trabajo tal cual), igual que transaccionEnMemoria de dao/transacciones.js.
  *    Se escribe acá para no importar ese módulo, que arrastra Sequelize: los tests no cargan nada de la base.
  *  - `topeCercaPct` se puede cambiar por test (por defecto 90, el del .env.example): llega inyectado, como en el container.
+ *  - `hoy` es la fecha que marca el reloj del test (AAAA-MM-DD, fija): los casos de uso no llaman a `new Date()`, le
+ *    preguntan a un `clock` inyectado, así que un test decide qué día es sin esperar a que llegue.
  */
-function crearEscenario({ activos = [], ordenes = [], etiquetas = [], vinculos = [], topeCercaPct = 90 } = {}) {
+function crearEscenario({ activos = [], ordenes = [], etiquetas = [], vinculos = [], topeCercaPct = 90, hoy = "2026-11-18" } = {}) {
   const etiquetasDao = new EtiquetasMemoryDao(etiquetas);
   const activosDao = new ActivosMemoryDao(activos, vinculos, etiquetasDao);
   const ordenesDao = new OrdenesMemoryDao(activosDao, ordenes);
   const events = { emit: vi.fn() };
   const transaccion = (trabajo) => trabajo(undefined);
+  const clock = { today: () => hoy };
 
-  const deps = { activosDao, ordenesDao, etiquetasDao, events, transaccion, topeCercaPct };
+  const deps = { activosDao, ordenesDao, etiquetasDao, events, transaccion, topeCercaPct, clock };
   return {
     dao: { activos: activosDao, ordenes: ordenesDao, etiquetas: etiquetasDao },
     events,

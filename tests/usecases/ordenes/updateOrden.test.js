@@ -31,6 +31,28 @@ describe("regla 7 al editar — una orden ejecutada no se modifica", () => {
   });
 });
 
+describe("regla 9 al editar — si cambia la validez, no puede ser anterior a hoy (reloj inyectado)", () => {
+  // El reloj del test marca el 18/11/2026; la orden ya guardada venció el 10/11 (se cargó directo en el DAO)
+  const escenario = () =>
+    crearEscenario({ activos: [unActivo()], ordenes: [unaOrden({ sentido: "venta", cantidad: 10, validaHasta: "2026-11-10" })], hoy: "2026-11-18" });
+
+  it("borde: se puede estirar hasta hoy mismo", async () => {
+    await expect(escenario().ordenes.updateOrden(1, { validaHasta: "2026-11-18" })).resolves.toMatchObject({ validaHasta: "2026-11-18" });
+  });
+
+  it("la viola: llevarla a ayer → 409 VALIDEZ_VENCIDA y el estado no cambió", async () => {
+    const esc = escenario();
+    const antes = await estado(esc);
+
+    await expect(esc.ordenes.updateOrden(1, { validaHasta: "2026-11-17" })).rejects.toMatchObject({ code: "VALIDEZ_VENCIDA", statusCode: 409 });
+    expect(await estado(esc)).toEqual(antes);
+  });
+
+  it("solo se mira si el pedido cambia la validez: a una orden ya vencida se le puede corregir el motivo", async () => {
+    await expect(escenario().ordenes.updateOrden(1, { motivo: "quedó vieja" })).resolves.toMatchObject({ motivo: "quedó vieja", validaHasta: "2026-11-10" });
+  });
+});
+
 describe("regla 3 al editar — el precio nuevo no puede ser el de OTRA orden viva del mismo activo y sentido", () => {
   // Dos compras vivas de KO: la 1 a 50 y la 2 a 48
   const escenario = () =>

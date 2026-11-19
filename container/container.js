@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { TOPE_CERCA_PCT } from "../config/config.js";
+import { TOPE_CERCA_PCT, CLOCK_NOW } from "../config/config.js";
 import { getActivosDao, getOrdenesDao, getEtiquetasDao, getTransaccion } from "../dao/daoFactory.js";
 import makeActivoUseCases from "../usecases/activos/makeActivoUseCases.js";
 import ActivosController from "../controllers/ActivosController.js";
@@ -16,6 +16,7 @@ import EVENTS from "../events/eventNames.js";
 import { getNotifier } from "../notifications/notifierFactory.js";
 import createMultiNotifier from "../notifications/multiNotifier.js";
 import registerAlertListeners from "../alerts/registerAlertListeners.js";
+import createClock from "../utils/clock.js";
 
 /**
  * Composition Root.
@@ -59,9 +60,12 @@ async function buildContainer() {
   // Las dos reciben la misma forma de transacción, elegida por la factory igual que los DAOs.
   // Los números de las reglas también se inyectan desde acá (clase 13): el umbral del aviso de tope llega a los casos de uso
   // como topeCercaPct, así que ninguno importa config.js y un test puede usar otro valor.
+  // El reloj también se inyecta: ningún caso de uso llama a new Date(), así que un test decide qué día es. Con CLOCK_NOW queda fijo.
   const transaccion = getTransaccion();
+  const clock = createClock({ fixedNow: CLOCK_NOW });
+  if (CLOCK_NOW) console.log(`[Reloj] Fijo en ${CLOCK_NOW} (hoy = ${clock.today()})`);
   const activoUseCases = makeActivoUseCases({ activosDao, ordenesDao, etiquetasDao, events, transaccion, topeCercaPct: TOPE_CERCA_PCT });
-  const ordenUseCases = makeOrdenUseCases({ ordenesDao, activosDao, events, transaccion, topeCercaPct: TOPE_CERCA_PCT });
+  const ordenUseCases = makeOrdenUseCases({ ordenesDao, activosDao, events, transaccion, topeCercaPct: TOPE_CERCA_PCT, clock });
   const etiquetaUseCases = makeEtiquetaUseCases({ etiquetasDao, activosDao, transaccion });
 
   // 4. Controladores con los casos de uso inyectados

@@ -1,5 +1,6 @@
 import EVENTS from "../../events/eventNames.js";
 import {
+  verificarValidez,
   obtenerActivoDeLaOrden,
   ordenesVivasDelMismoLado,
   verificarNivelOperable,
@@ -12,6 +13,7 @@ import {
  * Caso de uso: armar una orden nueva (nace "viva").
  * `data` ya viene validado en forma por Zod; acá se aplican las reglas que dependen de otros datos,
  * en este orden (de lo más básico a lo más fino):
+ *   9. la validez no es anterior a hoy        → VALIDEZ_VENCIDA (409)   (no lee nada: va primero)
  *   1. el activo existe                       → ACTIVO_NO_ENCONTRADO (404)
  *   4. si es compra, el nivel la permite      → NIVEL_NO_OPERABLE (409)
  *   3. no duplica una orden viva              → ORDEN_DUPLICADA (409)
@@ -31,7 +33,9 @@ import {
  * leen lo mismo, pasan los dos las reglas 3, 5 y 6 y se guardan los dos (una condición de carrera). Los eventos se emiten
  * DESPUÉS de que la transacción confirmó: adentro, un rollback posterior dejaría anunciado algo que no pasó.
  */
-async function createOrden(data, ordenesDao, activosDao, events, transaccion, topeCercaPct) {
+async function createOrden(data, ordenesDao, activosDao, events, transaccion, topeCercaPct, clock) {
+  verificarValidez(data.validaHasta, clock.today());
+
   const { activo, vivas, creada } = await transaccion(async (tx) => {
     const activo = await obtenerActivoDeLaOrden(data.activoId, activosDao, tx);
     verificarNivelOperable(activo, data.sentido);
