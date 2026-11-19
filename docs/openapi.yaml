@@ -17,6 +17,9 @@ info:
     Todo `POST` que crea algo responde **201 con el header `Location`**: la URL de lo creado, donde un `GET` lo devuelve
     (`/activos/4`, `/ordenes/4`, `/etiquetas/6`; al asignar una etiqueta, la del vínculo: `/activos/2/etiquetas/1`).
 
+    La regla 9 (la validez de una orden no puede ser anterior a hoy) mira la fecha a través de un **reloj inyectado**:
+    por defecto es la hora real (zona de Buenos Aires) y la variable `CLOCK_NOW` lo deja fijo en un instante, para probarla.
+
     Todos los errores tienen la forma `{ "error": { "code", "message", "details?" } }`.
     Los que Express detecta antes de llegar a una ruta conservan su status y llevan un código propio: **413**
     `PAYLOAD_TOO_LARGE` (cuerpo de más de 100 kb), **415** `UNSUPPORTED_MEDIA_TYPE` (charset o compresión no soportados)
@@ -486,6 +489,7 @@ paths:
       summary: Armar una orden (nace viva)
       description: |
         Reglas de negocio, en este orden:
+        **9** la validez no es anterior a hoy (409 `VALIDEZ_VENCIDA`) ·
         **1** el activo existe (404 `ACTIVO_NO_ENCONTRADO`) ·
         **4** solo se compra en nivel L2 o L3 (409 `NIVEL_NO_OPERABLE`) ·
         **3** no hay otra orden viva con el mismo activo, sentido y precio (409 `ORDEN_DUPLICADA`) ·
@@ -505,19 +509,19 @@ paths:
             examples:
               compra:
                 summary: Compra de AAPL (nivel L2, entra en el tope)
-                value: { activoId: 2, sentido: compra, cantidad: 5, precioLimite: 12, validaHasta: "2026-12-15", motivo: Segunda tanda de compra }
+                value: { activoId: 2, sentido: compra, cantidad: 5, precioLimite: 12, validaHasta: "2030-12-31", motivo: Segunda tanda de compra }
               venta:
                 summary: Venta de KO (hay CEDEARs disponibles)
-                value: { activoId: 1, sentido: venta, cantidad: 5, precioLimite: 80, validaHasta: "2026-12-15" }
+                value: { activoId: 1, sentido: venta, cantidad: 5, precioLimite: 80, validaHasta: "2030-12-31" }
               duplicada:
                 summary: Repite la orden 3 (da 409 ORDEN_DUPLICADA)
-                value: { activoId: 2, sentido: compra, cantidad: 1, precioLimite: 12.5, validaHasta: "2026-12-15" }
+                value: { activoId: 2, sentido: compra, cantidad: 1, precioLimite: 12.5, validaHasta: "2030-12-31" }
               topeExcedido:
                 summary: Supera el tope de AAPL (da 409 TOPE_EXCEDIDO)
-                value: { activoId: 2, sentido: compra, cantidad: 100, precioLimite: 11, validaHasta: "2026-12-15" }
+                value: { activoId: 2, sentido: compra, cantidad: 100, precioLimite: 11, validaHasta: "2030-12-31" }
               nivelNoOperable:
                 summary: Compra de GGAL en nivel L1 (da 409 NIVEL_NO_OPERABLE)
-                value: { activoId: 3, sentido: compra, cantidad: 1, precioLimite: 1000, validaHasta: "2026-12-15" }
+                value: { activoId: 3, sentido: compra, cantidad: 1, precioLimite: 1000, validaHasta: "2030-12-31" }
       responses:
         "201":
           description: Orden creada, en estado viva. `Location` = `/ordenes/{id}`
@@ -528,7 +532,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Orden"
-              example: { id: 4, activoId: 2, sentido: compra, cantidad: 5, precioLimite: 12, validaHasta: "2026-12-15", estado: viva, motivo: Segunda tanda de compra, activo: { id: 2, ticker: AAPL } }
+              example: { id: 4, activoId: 2, sentido: compra, cantidad: 5, precioLimite: 12, validaHasta: "2030-12-31", estado: viva, motivo: Segunda tanda de compra, activo: { id: 2, ticker: AAPL } }
         "400":
           $ref: "#/components/responses/ErrorEntrada"
         "404":
@@ -540,6 +544,9 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
               examples:
+                validezVencida:
+                  summary: Regla 9
+                  value: { error: { code: VALIDEZ_VENCIDA, message: "La orden no puede ser válida hasta el 2020-01-01: hoy es 2026-11-25" } }
                 ordenDuplicada:
                   summary: Regla 3
                   value: { error: { code: ORDEN_DUPLICADA, message: Ya existe la orden viva 3 de compra de AAPL a 12.5 } }
@@ -585,8 +592,9 @@ paths:
       summary: Modificar parcialmente una orden viva
       description: |
         Solo se editan `cantidad`, `precioLimite`, `validaHasta` y `motivo` (al menos uno). `activoId` y `sentido` no:
-        sería otra orden. Reglas: **7** no se modifica una orden ejecutada · **3** si cambia el precio, no duplica otra viva ·
-        **5/6** si cambia la cantidad, entra en lo disponible. En 3, 5 y 6 la propia orden no se cuenta.
+        sería otra orden. Reglas: **7** no se modifica una orden ejecutada · **9** si cambia la validez, no es anterior a
+        hoy · **3** si cambia el precio, no duplica otra viva · **5/6** si cambia la cantidad, entra en lo disponible.
+        En 3, 5 y 6 la propia orden no se cuenta.
         Si el cambio incluye la `cantidad` de una compra y lo comprometido llega a `TOPE_CERCA_PCT` % del tope,
         emite `activo.topeCerca`; editar solo precio, fecha o motivo no avisa.
       operationId: actualizarOrden
@@ -602,7 +610,7 @@ paths:
                 value: { precioLimite: 71 }
               validez:
                 summary: Extender la validez y anotar el motivo
-                value: { validaHasta: "2026-12-20", motivo: Sigue vigente la tesis }
+                value: { validaHasta: "2030-12-31", motivo: Sigue vigente la tesis }
       responses:
         "200":
           description: Orden actualizada
@@ -616,7 +624,7 @@ paths:
         "404":
           $ref: "#/components/responses/OrdenNoEncontrada"
         "409":
-          description: Una regla de negocio impide modificarla (reglas 3, 5, 6 o 7)
+          description: Una regla de negocio impide modificarla (reglas 3, 5, 6, 7 o 9)
           content:
             application/json:
               schema:
@@ -625,6 +633,9 @@ paths:
                 ordenNoModificable:
                   summary: Regla 7
                   value: { error: { code: ORDEN_NO_MODIFICABLE, "message": "La orden 2 ya está ejecutada: no se puede modificar" } }
+                validezVencida:
+                  summary: Regla 9
+                  value: { error: { code: VALIDEZ_VENCIDA, message: "La orden no puede ser válida hasta el 2020-01-01: hoy es 2026-11-25" } }
                 ordenDuplicada:
                   summary: Regla 3
                   value: { error: { code: ORDEN_DUPLICADA, message: Ya existe la orden viva 3 de compra de AAPL a 12.5 } }
@@ -1276,7 +1287,7 @@ components:
         validaHasta:
           type: string
           format: date
-          example: "2026-12-15"
+          example: "2030-12-31"
         motivo:
           type: string
           maxLength: 400

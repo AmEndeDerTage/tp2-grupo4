@@ -2,7 +2,8 @@
 ### Documentación interactiva: http://localhost:8000/api-docs
 ### Correrlos EN ORDEN con el servidor recién arrancado y los datos en la semilla: en memoria alcanza con reiniciar;
 ### en sequelize los datos sobreviven al reinicio, así que antes hay que parar el servidor y borrar database.sqlite.
-### Los 131 casos dan lo mismo en los dos modos (PERSISTENCE_TYPE en .env).
+### Los 133 casos dan lo mismo en los dos modos (PERSISTENCE_TYPE en .env).
+### Las órdenes que se crean valen hasta 2030-12-31: la regla 9 (la validez no puede ser anterior a hoy) no las vence.
 ### Los POST que crean responden 201 con el header Location (la URL de lo creado): se ve en los headers de la respuesta.
 ### Los eventos (54 a 75) no cambian las respuestas: se ven en la consola del servidor y en notifications.log.
 ### Los pedidos con "# @name" guardan su respuesta: los siguientes usan el id creado ({{nombre.response.body.$.id}}).
@@ -176,7 +177,7 @@ Content-Type: application/json
   "sentido": "compra",
   "cantidad": 5,
   "precioLimite": 12,
-  "validaHasta": "2026-12-15",
+  "validaHasta": "2030-12-31",
   "motivo": "Segunda tanda de compra",
   "estado": "ejecutada",
   "id": 77
@@ -203,7 +204,7 @@ Content-Type: application/json
   "sentido": "compra",
   "cantidad": 1,
   "precioLimite": 10,
-  "validaHasta": "2026-12-15"
+  "validaHasta": "2030-12-31"
 }
 
 ### 33. (preparación de la regla 4) Activo en nivel L1, solo seguimiento → 201
@@ -229,7 +230,7 @@ Content-Type: application/json
   "sentido": "compra",
   "cantidad": 1,
   "precioLimite": 10,
-  "validaHasta": "2026-12-15"
+  "validaHasta": "2030-12-31"
 }
 
 ### 35. REGLA 3 — misma orden viva (activo, sentido y precio de la 3) → 409 ORDEN_DUPLICADA
@@ -241,7 +242,7 @@ Content-Type: application/json
   "sentido": "compra",
   "cantidad": 1,
   "precioLimite": 12.5,
-  "validaHasta": "2026-12-15"
+  "validaHasta": "2030-12-31"
 }
 
 ### 36. REGLA 5 — vender más de lo disponible (KO: 45 en cartera − 10 en ventas vivas = 35) → 409 CANTIDAD_INSUFICIENTE
@@ -253,7 +254,7 @@ Content-Type: application/json
   "sentido": "venta",
   "cantidad": 36,
   "precioLimite": 80,
-  "validaHasta": "2026-12-15"
+  "validaHasta": "2030-12-31"
 }
 
 ### 37. REGLA 6 — comprar por encima del tope (AAPL: 0 + 15 en compras vivas + 16 = 31 > 30) → 409 TOPE_EXCEDIDO
@@ -265,7 +266,7 @@ Content-Type: application/json
   "sentido": "compra",
   "cantidad": 16,
   "precioLimite": 11,
-  "validaHasta": "2026-12-15"
+  "validaHasta": "2030-12-31"
 }
 
 ### 38. Modificar parcialmente (precio) → 200
@@ -369,7 +370,7 @@ Content-Type: application/json
   "sentido": "compra",
   "cantidad": 5,
   "precioLimite": 12,
-  "validaHasta": "2026-12-15",
+  "validaHasta": "2030-12-31",
   "motivo": "Tercera tanda de compra"
 }
 
@@ -398,7 +399,7 @@ Content-Type: application/json
   "sentido": "venta",
   "cantidad": 5,
   "precioLimite": 80,
-  "validaHasta": "2026-12-15"
+  "validaHasta": "2030-12-31"
 }
 
 ### 58. Compra que llena el tope (AAPL: 10 + 17 + 3 = 30 de 30, 100 %) → 201 · consola: tabla y aviso de tope; notifications.log: aviso de tope
@@ -410,7 +411,7 @@ Content-Type: application/json
   "sentido": "compra",
   "cantidad": 3,
   "precioLimite": 14,
-  "validaHasta": "2026-12-15"
+  "validaHasta": "2030-12-31"
 }
 
 ### 59. Una compra más, rechazada por la regla 6 (30 + 1 > 30) → 409 TOPE_EXCEDIDO · sin eventos: no se guardó nada
@@ -422,7 +423,7 @@ Content-Type: application/json
   "sentido": "compra",
   "cantidad": 1,
   "precioLimite": 15,
-  "validaHasta": "2026-12-15"
+  "validaHasta": "2030-12-31"
 }
 
 ### ===================== EJECUCIÓN CON TRANSACCIÓN (extra) =====================
@@ -463,7 +464,7 @@ Content-Type: application/json
   "sentido": "venta",
   "cantidad": 30,
   "precioLimite": 85,
-  "validaHasta": "2026-12-15",
+  "validaHasta": "2030-12-31",
   "motivo": "Cierre de la posición"
 }
 
@@ -500,7 +501,7 @@ Content-Type: application/json
   "sentido": "venta",
   "cantidad": 5,
   "precioLimite": 16,
-  "validaHasta": "2026-12-15"
+  "validaHasta": "2030-12-31"
 }
 
 ### 72. Bajar la cartera de AAPL a 4 con 5 en ventas vivas → 409 CANTIDAD_INSUFICIENTE
@@ -849,6 +850,7 @@ Content-Type: application/json
 }
 
 ### 129. (preparación) Una compra viva de 5 TSLA → 201 · consola: tabla de COMPRA
+# @name compraTsla
 POST {{base}}/ordenes
 Content-Type: application/json
 
@@ -857,7 +859,7 @@ Content-Type: application/json
   "sentido": "compra",
   "cantidad": 5,
   "precioLimite": 20,
-  "validaHasta": "2026-12-15"
+  "validaHasta": "2030-12-31"
 }
 
 ### 130. Bajar TSLA a L1 con su compra viva → 409 NIVEL_NO_OPERABLE
@@ -874,4 +876,28 @@ Content-Type: application/json
 
 {
   "nivel": "L3"
+}
+
+### ===================== LA REGLA 9: LA VALIDEZ NO PUEDE SER ANTERIOR A HOY =====================
+### «Hoy» lo dice un reloj inyectado en los casos de uso (utils/clock.js): por defecto, la hora real.
+### Para viajar en el tiempo, arrancar con CLOCK_NOW (p. ej. CLOCK_NOW=2031-01-01T12:00:00-03:00): ahí el caso 129 da 409.
+
+### 132. Armar una orden que ya venció → 409 VALIDEZ_VENCIDA
+POST {{base}}/ordenes
+Content-Type: application/json
+
+{
+  "activoId": 1,
+  "sentido": "venta",
+  "cantidad": 1,
+  "precioLimite": 95,
+  "validaHasta": "2020-01-01"
+}
+
+### 133. Llevar la validez de una orden viva al pasado → 409 VALIDEZ_VENCIDA
+PUT {{base}}/ordenes/{{compraTsla.response.body.$.id}}
+Content-Type: application/json
+
+{
+  "validaHasta": "2020-01-01"
 }

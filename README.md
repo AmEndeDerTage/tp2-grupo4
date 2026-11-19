@@ -101,6 +101,7 @@ Viven en los casos de uso (`usecases/`) y responden con un código propio en el 
 | 6 | Cartera + compras vivas + la compra nueva no superan el `topeCedears` | `TOPE_EXCEDIDO` | 409 |
 | 7 | Una orden ejecutada no se modifica, no se borra ni se vuelve a ejecutar | `ORDEN_NO_MODIFICABLE` | 409 |
 | 8 | No se borra un activo con órdenes (vivas o ejecutadas: el historial no queda huérfano) | `ACTIVO_CON_ORDENES` | 409 |
+| 9 | La validez de una orden (`validaHasta`) no puede ser anterior a hoy, al crearla o al cambiarle la fecha | `VALIDEZ_VENCIDA` | 409 |
 
 Las reglas 4, 5 y 6 también se verifican desde el activo: al editar su `cantidad` o su `topeCedears` (5 y 6), al crearlo (6: no nace con más cartera que tope) y al cambiarle el `nivel` (4: con compras vivas no puede salir de `L2`/`L3`). La relación N:N suma las suyas: nombre de etiqueta único (`ETIQUETA_DUPLICADA` 409), la etiqueta tiene que existir (`ETIQUETA_NO_ENCONTRADA` 404), no se asigna dos veces (`ETIQUETA_YA_ASIGNADA` 409) y solo se quita una que el activo tiene (`ETIQUETA_NO_ASIGNADA` 404). Borrar una etiqueta en uso la saca de todos los activos.
 
@@ -132,6 +133,7 @@ Se leen del archivo `.env` (con `node --env-file=.env`, sin `dotenv`). `config/c
 | `NOTIFIER_TYPE` | `console` · `file` | `console` | Canal de los avisos `orden.creada` y `orden.ejecutada` |
 | `NOTIFICATIONS_LOG_PATH` | ruta | `notifications.log` | Archivo de los avisos que salen por archivo |
 | `TOPE_CERCA_PCT` | número entre 0 (excluido) y 100 | `90` | Desde qué porcentaje del tope avisa `activo.topeCerca` |
+| `CLOCK_NOW` | vacío o fecha ISO (`2026-12-01T12:00:00-03:00`) | vacío | Reloj de la regla 9: vacío es la hora real; con una fecha queda fijo, para probarla |
 
 ## Cómo cambiar de persistencia
 
@@ -180,7 +182,7 @@ Por ejemplo, crear una compra de 18 AAPL a US$ 12 con la semilla imprime en la c
   Cantidad        | 18 CEDEARs
   Precio límite   | US$ 12.00 por CEDEAR
   Monto al límite | US$ 216.00
-  Válida hasta    | 2026-12-15
+  Válida hasta    | 2030-12-31
 [NOTIFICACIÓN] AAPL cerca del tope
 28 de 30 CEDEARs comprometidos (93.3 %): 0 en cartera + 28 en compras vivas. Aviso desde el 90 %.
 ```
@@ -195,7 +197,7 @@ El aviso de tope además queda en `notifications.log`. Para ver que un notificad
 npm test
 ```
 
-Están en `tests/usecases/`, con la misma organización que `usecases/`, y cubren las reglas de negocio en sus casos feliz, de borde y de violación (verificando además que el estado no cambie y que no se emitan eventos), la ejecución con su vuelta atrás ante una falla, el alta atómica con etiquetas y los vínculos de la N:N. `tests/helpers/escenario.js` arma en cada test DAOs nuevos con sus propios datos y un bus espía.
+Están en `tests/usecases/`, con la misma organización que `usecases/`, y cubren las reglas de negocio en sus casos feliz, de borde y de violación (verificando además que el estado no cambie y que no se emitan eventos), la ejecución con su vuelta atrás ante una falla, el alta atómica con etiquetas y los vínculos de la N:N. `tests/helpers/escenario.js` arma en cada test DAOs nuevos con sus propios datos, un bus espía y un reloj fijo.
 
 **Pruebas manuales:** `requests.http` tiene los pedidos de punta a punta, cada uno con el resultado esperado en su título (`→ 409 TOPE_EXCEDIDO`). Se corre con la extensión **REST Client** de VS Code, en orden y con el servidor recién arrancado (en `sequelize`, después de borrar `database.sqlite`), en cualquiera de los dos modos.
 
@@ -212,6 +214,7 @@ usecases/           casos de uso y reglas de negocio (no conocen HTTP ni la base
 dao/                DAO en memoria y en Sequelize con la misma interfaz, factory, modelos, semilla, transacciones
 connection/         conexión de Sequelize a SQLite
 events/  alerts/  notifications/   bus de eventos, listeners y notificadores
+utils/              reloj inyectable (la fecha de hoy es un dato externo)
 middlewares/  errors/              logger, validación, notFound, errorHandler y AppError
 docs/               openapi.yaml y el router de Swagger UI
 tests/              tests de casos de uso (Vitest)
