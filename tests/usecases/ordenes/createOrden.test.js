@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { crearEscenario, estado, unActivo, unaOrden, pedidoDeOrden } from "../../helpers/escenario.js";
 import EVENTS from "../../../events/eventNames.js";
 
-// createOrden con DAOs en memoria como dobles. Para cada regla, los cuatro casos de la clase 13:
+// createOrden con DAOs en memoria como dobles. Para cada regla, cuatro casos:
 // el feliz, el borde, el que la viola y que el estado no cambió tras el rechazo.
 
 describe("createOrden — camino feliz", () => {

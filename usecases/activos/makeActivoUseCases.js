@@ -18,10 +18,10 @@ import quitarEtiqueta from "./quitarEtiqueta.js";
  *    en órdenes vivas (reglas 5 y 6 vistas desde el activo)
  *  - etiquetasDao: el del otro lado de la N:N Activo–Etiqueta, para verificar que existan las etiquetas que se asignan,
  *    se quitan o con las que nace un activo
- *  - events: el bus de eventos, para que updateActivo avise activo.topeCerca (clase 10)
+ *  - events: el bus de eventos, para que updateActivo avise activo.topeCerca
  *  - transaccion: cómo correr leer-verificar-escribir como una sola operación (dao/transacciones.js)
  *  - topeCercaPct: el umbral del aviso activo.topeCerca (TOPE_CERCA_PCT) para updateActivo, inyectado como en
- *    makeOrdenUseCases (clase 13): ningún caso de uso importa config.js
+ *    makeOrdenUseCases: ningún caso de uso importa config.js
  * y devuelve los casos de uso con ellas ya inyectadas, para que el controlador los llame sin conocer ningún DAO.
  */
 function makeActivoUseCases({ activosDao, ordenesDao, etiquetasDao, events, transaccion, topeCercaPct }) {

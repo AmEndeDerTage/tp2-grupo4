@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import { crearEscenario, estado, unActivo, unaOrden } from "../../helpers/escenario.js";
 import EVENTS from "../../../events/eventNames.js";
 
-// ejecutarOrden: la orden pasa a "ejecutada" y la cartera se mueve, todo junto o nada (la operación atómica del extra).
+// ejecutarOrden: la orden pasa a "ejecutada" y la cartera se mueve, todo junto o nada (una operación atómica).
 
 describe("ejecutarOrden — camino feliz", () => {
   it("una compra viva sobre un L2: orden ejecutada, cartera + cantidad, nivel L3 y orden.ejecutada con el antes y el después", async () => {

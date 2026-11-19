@@ -7,13 +7,13 @@ import ejecutarOrden from "./ejecutarOrden.js";
 
 /**
  * Factory de casos de uso de Órdenes.
- * Recibe sus dependencias por nombre en un objeto (como makeLoanUseCases del profesor):
+ * Recibe sus dependencias por nombre en un objeto (así el orden no importa y se lee qué es cada una):
  *  - ordenesDao: el DAO de la propia entidad
  *  - activosDao: el de la entidad relacionada, para las reglas que miran el activo de la orden
- *  - events: el bus de eventos, para que createOrden, updateOrden y ejecutarOrden anuncien lo que pasó (clase 10)
+ *  - events: el bus de eventos, para que createOrden, updateOrden y ejecutarOrden anuncien lo que pasó
  *  - transaccion: cómo correr leer-verificar-escribir como una sola operación (dao/transacciones.js)
- *  - topeCercaPct: el umbral del aviso activo.topeCerca (TOPE_CERCA_PCT), para createOrden y updateOrden. Llega inyectado
- *    como lowStockThreshold en makeLoanUseCases del profesor (clase 13): ningún caso de uso importa config.js
+ *  - topeCercaPct: el umbral del aviso activo.topeCerca (TOPE_CERCA_PCT), para createOrden y updateOrden. Llega inyectado:
+ *    ningún caso de uso importa config.js
  *  - clock: el reloj, para las reglas que miran la fecha de hoy: ningún caso de uso llama a new Date()
  * y devuelve los casos de uso con ellas ya inyectadas, para que el controlador los llame sin conocer ningún DAO.
  */

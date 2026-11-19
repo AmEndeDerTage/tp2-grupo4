@@ -21,7 +21,7 @@ import { verificarCompromisos, verificarNivelConCompras, evaluarTopeCerca } from
  * `topeCercaPct` % o más del tope, emite activo.topeCerca, el mismo aviso que una compra. Se llega al tope por
  * cualquiera de las dos puertas, y el aviso dice «el activo está cerca del tope», no «una compra lo acercó».
  * Cambiar solo el nivel, el nombre o el ticker no vuelve a avisar. Se emite después del commit.
- * El umbral `topeCercaPct` llega inyectado desde el container (clase 13), como en createOrden y updateOrden.
+ * El umbral `topeCercaPct` llega inyectado desde el container, como en createOrden y updateOrden.
  */
 async function updateActivo(id, cambios, activosDao, ordenesDao, events, transaccion, topeCercaPct) {
   const tocaCupo = cambios.cantidad !== undefined || cambios.topeCedears !== undefined;

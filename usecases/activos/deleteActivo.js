@@ -5,7 +5,7 @@ import AppError from "../../errors/AppError.js";
  * Regla de negocio 8: no se borra un activo que tenga órdenes, vivas o ejecutadas (ACTIVO_CON_ORDENES, 409).
  * Es integridad referencial aplicada en el dominio: ninguna orden queda apuntando a un activo que ya no existe,
  * y el historial de órdenes ejecutadas no queda huérfano.
- * Por eso este caso de uso de Activos recibe también el DAO de Órdenes (como deleteBook del profesor con loansDao).
+ * Por eso este caso de uso de Activos recibe también el DAO de Órdenes: la regla mira datos de la otra entidad.
  * Contar y borrar van en una transacción: si no, una orden creada en el medio pasaría la regla y la FK RESTRICT
  * respondería con un 500 en lugar del 409 de la regla.
  * Devuelve `true` si lo borró o `false` si no existía.

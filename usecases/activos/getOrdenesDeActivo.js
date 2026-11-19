@@ -1,7 +1,7 @@
 /**
  * Caso de uso: listar las órdenes de un activo (recorrer la relación Activo 1:N Orden desde el lado "1").
- * Vive en Activos porque la URL es de Activos (/activos/:id/ordenes), igual que el profesor resuelve
- * "los libros de un usuario" en el caso de uso de Users con el DAO de préstamos.
+ * Vive en Activos porque la URL es de Activos (/activos/:id/ordenes) y lo primero que hay que saber es si el activo
+ * existe; las órdenes las trae el DAO de Órdenes, que este caso de uso recibe como segunda dependencia.
  * Devuelve `null` si el activo no existe (el 404 lo decide el controlador); si existe, la misma respuesta
  * paginada que GET /ordenes: { page, limit, total, data }.
  */

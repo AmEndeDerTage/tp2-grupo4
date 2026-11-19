@@ -4,7 +4,7 @@ import { verificarCompromisos } from "../ordenes/reglasOrden.js";
 /**
  * Caso de uso: dar de alta un activo, opcionalmente con sus etiquetas (`etiquetaIds`).
  * Es la operación atómica de la relación N:N: escribe en dos tablas (el activo y sus vínculos en activo_etiquetas)
- * y tiene que quedar entera o no quedar, como lend() en el ejemplo de la materia (préstamo + stock).
+ * y tiene que quedar entera o no quedar: un activo creado sin sus etiquetas sería un alta a medias.
  * Reglas, en este orden (el mismo que updateActivo):
  *   2. el ticker es único                                        → TICKER_DUPLICADO (409)
  *   6. el activo no nace con más CEDEARs en cartera que su tope

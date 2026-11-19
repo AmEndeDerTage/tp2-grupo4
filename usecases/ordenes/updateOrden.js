@@ -21,12 +21,12 @@ import {
  * En 3, 5 y 6 la propia orden no se cuenta (excluirId): si no, se compararía consigo misma.
  *
  * Evento: si el cambio incluye la cantidad de una compra y lo comprometido queda en `topeCercaPct` % o más
- * del tope, emite activo.topeCerca (mismo criterio que updateBook del profesor: editar solo el precio,
- * la fecha o el motivo no vuelve a avisar). orden.creada no se emite: la orden ya existía.
+ * del tope, emite activo.topeCerca. Editar solo el precio, la fecha o el motivo no vuelve a avisar: el aviso responde
+ * a un cambio en lo comprometido, no a cualquier edición. orden.creada no se emite: la orden ya existía.
  *
  * Como en createOrden, leer, verificar y guardar van en una transacción y el evento sale después del commit.
  * La regla 7 también queda protegida: una ejecución simultánea no puede colarse entre la lectura y la escritura.
- * El umbral `topeCercaPct` llega inyectado desde el container (clase 13), como en createOrden.
+ * El umbral `topeCercaPct` llega inyectado desde el container, como en createOrden.
  */
 async function updateOrden(id, cambios, ordenesDao, activosDao, events, transaccion, topeCercaPct, clock) {
   const resultado = await transaccion(async (tx) => {
