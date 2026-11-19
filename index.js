@@ -1,6 +1,7 @@
 import express from "express";
 import logger from "./middlewares/logger.js";
 import cabeceras from "./middlewares/cabeceras.js";
+import { generalLimiter } from "./middlewares/rateLimit.js";
 import notFound from "./middlewares/notFound.js";
 import errorHandler from "./middlewares/errorHandler.js";
 import { PORT, PERSISTENCE_TYPE } from "./config/config.js";
@@ -11,9 +12,11 @@ import buildContainer from "./container/container.js";
 async function startServer() {
   const app = express();
 
-  // Middlewares globales, en este orden: registrar el pedido, poner las cabeceras de seguridad y, recién entonces, leer el cuerpo
+  // Middlewares globales, en este orden: registrar el pedido, poner las cabeceras de seguridad, contarlo contra el
+  // límite y, recién entonces, leer el cuerpo (así un pedido que se pasa del límite no llega a gastar nada más)
   app.use(logger);
   app.use(cabeceras);
+  app.use(generalLimiter);
   app.use(express.json());
 
   // El Composition Root arma todas las dependencias y devuelve el router principal

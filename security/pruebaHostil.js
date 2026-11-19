@@ -9,7 +9,8 @@
 const MENSAJE_PRUEBA_HOSTIL = "Osvaldo Ojeda: you shall not pass!";
 
 // Rechazos que ningún uso normal de la API produce: con solo ver el code alcanza.
-const CODIGOS_HOSTILES = new Set(["PAYLOAD_TOO_LARGE", "UNSUPPORTED_MEDIA_TYPE", "BAD_REQUEST"]);
+// Los tres primeros son pedidos que ni se pudieron leer; después, un token que no firmó este servidor y los dos límites de pedidos.
+const CODIGOS_HOSTILES = new Set(["PAYLOAD_TOO_LARGE", "UNSUPPORTED_MEDIA_TYPE", "BAD_REQUEST", "TOKEN_INVALID", "TOO_MANY_REQUESTS", "TOO_MANY_ATTEMPTS"]);
 
 // Firmas: fragmentos típicos de cada familia de ataque. Se buscan en la URL y en los textos del cuerpo.
 // Todas tienen repeticiones acotadas ({0,5}, {1,30}): el tiempo de revisión crece en proporción al texto y nunca más,

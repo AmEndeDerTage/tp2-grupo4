@@ -7,11 +7,11 @@ const pedido = (originalUrl, body) => ({ originalUrl, body });
 const hostil = (url, body, code = "VALIDATION_ERROR") => esPruebaHostil(code, pedido(url, body));
 
 describe("esPruebaHostil — por el code del rechazo", () => {
-  it.each(["PAYLOAD_TOO_LARGE", "UNSUPPORTED_MEDIA_TYPE", "BAD_REQUEST"])("%s: ningún uso normal lo produce, alcanza con el code", (code) => {
+  it.each(["PAYLOAD_TOO_LARGE", "UNSUPPORTED_MEDIA_TYPE", "BAD_REQUEST", "TOKEN_INVALID", "TOO_MANY_REQUESTS", "TOO_MANY_ATTEMPTS"])("%s: ningún uso normal lo produce, alcanza con el code", (code) => {
     expect(hostil("/etiquetas", undefined, code)).toBe(true);
   });
 
-  it.each(["VALIDATION_ERROR", "INVALID_JSON", "ROUTE_NOT_FOUND", "ACTIVO_NO_ENCONTRADO", "TOPE_EXCEDIDO"])(
+  it.each(["VALIDATION_ERROR", "INVALID_JSON", "ROUTE_NOT_FOUND", "ACTIVO_NO_ENCONTRADO", "TOPE_EXCEDIDO", "TOKEN_MISSING", "TOKEN_EXPIRED", "INVALID_CREDENTIALS"])(
     "%s: un error común, sin firma en el pedido, no lo es",
     (code) => {
       expect(hostil("/activos/abc?nivel=L9", { nombre: "Coca-Cola" }, code)).toBe(false);
