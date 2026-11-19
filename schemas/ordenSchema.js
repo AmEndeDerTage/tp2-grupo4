@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { MAX_CANTIDAD, MAX_PRECIO, esTextoLimpio, MENSAJE_TEXTO_LIMPIO, enteroPositivoDeTexto } from "./comunes.js";
 
 /**
  * Esquemas de validación de Orden (Zod).
@@ -25,14 +26,16 @@ const campos = {
   cantidad: z
     .number({ error: "La cantidad debe ser un número" })
     .int("La cantidad debe ser un número entero")
-    .positive("La cantidad debe ser mayor a 0"),
-  precioLimite: z.number({ error: "El precio límite debe ser un número" }).positive("El precio límite debe ser mayor a 0"),
+    .positive("La cantidad debe ser mayor a 0")
+    .max(MAX_CANTIDAD, `La cantidad no puede superar ${MAX_CANTIDAD}`),
+  precioLimite: z.number({ error: "El precio límite debe ser un número" }).positive("El precio límite debe ser mayor a 0").max(MAX_PRECIO, `El precio límite no puede superar ${MAX_PRECIO}`),
   // Fecha de calendario ISO (AAAA-MM-DD): Zod verifica el formato y que la fecha exista (no acepta 2026-02-30)
   validaHasta: z.iso.date({ error: "validaHasta debe ser una fecha con formato AAAA-MM-DD" }),
   motivo: z
     .string({ error: "El motivo debe ser un texto" })
     .trim()
-    .max(400, "El motivo no puede superar los 400 caracteres"),
+    .max(400, "El motivo no puede superar los 400 caracteres")
+    .refine(esTextoLimpio, `El motivo ${MENSAJE_TEXTO_LIMPIO}`),
   estado: z.enum(ESTADOS, { error: `El estado debe ser uno de: ${ESTADOS.join(", ")}` }),
 };
 
@@ -60,15 +63,11 @@ const updateOrdenSchema = z
     error: "Hay que enviar al menos uno de: cantidad, precioLimite, validaHasta, motivo",
   });
 
-// GET /ordenes: filtros, orden y paginación. Todo llega como texto en la URL, por eso z.coerce.
+// GET /ordenes: filtros, orden y paginación. Todo llega como texto en la URL: los números se validan y convierten con enteroPositivoDeTexto.
 const queryOrdenesSchema = z.object({
   estado: campos.estado.optional(),
   sentido: campos.sentido.optional(),
-  activoId: z.coerce
-    .number({ error: "activoId debe ser un número" })
-    .int("activoId debe ser un entero")
-    .positive("activoId debe ser positivo")
-    .optional(),
+  activoId: enteroPositivoDeTexto("activoId").optional(),
   sort: z
     .string()
     .regex(
@@ -76,12 +75,9 @@ const queryOrdenesSchema = z.object({
       `sort debe ser uno de: ${CAMPOS_ORDENABLES.join(", ")} (con '-' adelante para descendente)`
     )
     .optional(),
-  page: z.coerce.number({ error: "page debe ser un número" }).int("page debe ser un entero").positive("page debe ser mayor a 0").default(1),
-  limit: z.coerce
-    .number({ error: "limit debe ser un número" })
-    .int("limit debe ser un entero")
-    .positive("limit debe ser mayor a 0")
-    .max(100, "limit no puede superar 100")
+  page: enteroPositivoDeTexto("page").default(1),
+  limit: enteroPositivoDeTexto("limit")
+    .refine((n) => n <= 100, "limit no puede superar 100")
     .default(20),
 });
 
@@ -90,7 +86,7 @@ const queryOrdenesDeActivoSchema = queryOrdenesSchema.omit({ activoId: true });
 
 // Parámetro de ruta :id (GET /ordenes/:id, PUT, DELETE)
 const ordenIdParamSchema = z.object({
-  id: z.coerce.number({ error: "El id debe ser un número" }).int("El id debe ser un número entero").positive("El id debe ser positivo"),
+  id: enteroPositivoDeTexto("El id"),
 });
 
 export {

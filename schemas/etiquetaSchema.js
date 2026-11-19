@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { enteroPositivoDeTexto } from "./comunes.js";
 
 /**
  * Esquemas de validación de Etiqueta (Zod): la FORMA del dato.
@@ -34,7 +35,7 @@ const updateEtiquetaSchema = z
   })
   .refine((data) => Object.keys(data).length > 0, { error: "Hay que enviar al menos un campo para actualizar" });
 
-// GET /etiquetas: orden y paginación. Todo llega como texto en la URL, por eso z.coerce.
+// GET /etiquetas: orden y paginación. Todo llega como texto en la URL: los números se validan y convierten con enteroPositivoDeTexto.
 const queryEtiquetasSchema = z.object({
   sort: z
     .string()
@@ -43,18 +44,15 @@ const queryEtiquetasSchema = z.object({
       `sort debe ser uno de: ${CAMPOS_ORDENABLES.join(", ")} (con '-' adelante para descendente)`
     )
     .optional(),
-  page: z.coerce.number({ error: "page debe ser un número" }).int("page debe ser un entero").positive("page debe ser mayor a 0").default(1),
-  limit: z.coerce
-    .number({ error: "limit debe ser un número" })
-    .int("limit debe ser un entero")
-    .positive("limit debe ser mayor a 0")
-    .max(100, "limit no puede superar 100")
+  page: enteroPositivoDeTexto("page").default(1),
+  limit: enteroPositivoDeTexto("limit")
+    .refine((n) => n <= 100, "limit no puede superar 100")
     .default(20),
 });
 
 // Parámetro de ruta :id (GET /etiquetas/:id, PUT, DELETE)
 const etiquetaIdParamSchema = z.object({
-  id: z.coerce.number({ error: "El id debe ser un número" }).int("El id debe ser un número entero").positive("El id debe ser positivo"),
+  id: enteroPositivoDeTexto("El id"),
 });
 
 // El campo nombre se exporta para que el filtro GET /activos?etiqueta= lo valide y normalice igual que el alta

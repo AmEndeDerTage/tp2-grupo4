@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { nombreEtiqueta } from "./etiquetaSchema.js";
+import { MAX_CANTIDAD, MAX_RATIO, esTextoLimpio, MENSAJE_TEXTO_LIMPIO, enteroPositivoDeTexto } from "./comunes.js";
 
 /**
  * Esquemas de validación de Activo (Zod).
@@ -22,18 +23,20 @@ const campos = {
     .trim()
     .toUpperCase()
     .regex(/^[A-Z][A-Z0-9.]{0,9}$/, "El ticker debe tener entre 1 y 10 caracteres: letras mayúsculas, dígitos o punto, empezando con letra"),
-  nombre: z.string({ error: "El nombre es obligatorio y debe ser un texto" }).trim().min(1, "El nombre no puede estar vacío"),
+  nombre: z.string({ error: "El nombre es obligatorio y debe ser un texto" }).trim().min(1, "El nombre no puede estar vacío").max(100, "El nombre no puede superar los 100 caracteres").refine(esTextoLimpio, `El nombre ${MENSAJE_TEXTO_LIMPIO}`),
   mercado: z.enum(MERCADOS, { error: `El mercado debe ser uno de: ${MERCADOS.join(", ")}` }),
-  ratio: z.number({ error: "El ratio debe ser un número" }).positive("El ratio debe ser mayor a 0"),
+  ratio: z.number({ error: "El ratio debe ser un número" }).positive("El ratio debe ser mayor a 0").max(MAX_RATIO, `El ratio no puede superar ${MAX_RATIO}`),
   nivel: z.enum(NIVELES, { error: `El nivel debe ser uno de: ${NIVELES.join(", ")}` }),
   cantidad: z
     .number({ error: "La cantidad debe ser un número" })
     .int("La cantidad debe ser un número entero")
-    .nonnegative("La cantidad no puede ser negativa"),
+    .nonnegative("La cantidad no puede ser negativa")
+    .max(MAX_CANTIDAD, `La cantidad no puede superar ${MAX_CANTIDAD}`),
   topeCedears: z
     .number({ error: "El tope de CEDEARs debe ser un número" })
     .int("El tope de CEDEARs debe ser un número entero")
-    .positive("El tope de CEDEARs debe ser mayor a 0"),
+    .positive("El tope de CEDEARs debe ser mayor a 0")
+    .max(MAX_CANTIDAD, `El tope de CEDEARs no puede superar ${MAX_CANTIDAD}`),
 };
 
 // POST /activos: todo obligatorio salvo cantidad (un activo puede darse de alta sin posición) y etiquetaIds.
@@ -72,7 +75,7 @@ const updateActivoSchema = z
   })
   .refine((data) => Object.keys(data).length > 0, { error: "Hay que enviar al menos un campo para actualizar" });
 
-// GET /activos: filtros, orden y paginación. Todo llega como texto en la URL, por eso z.coerce.
+// GET /activos: filtros, orden y paginación. Todo llega como texto en la URL: los números se validan y convierten con enteroPositivoDeTexto.
 // `etiqueta` filtra por el nombre de una etiqueta (la N:N recorrida desde la etiqueta), normalizado como en su alta:
 // ?etiqueta=Dividendos es lo mismo que ?etiqueta=dividendos.
 const queryActivosSchema = z.object({
@@ -86,26 +89,20 @@ const queryActivosSchema = z.object({
       `sort debe ser uno de: ${CAMPOS_ORDENABLES.join(", ")} (con '-' adelante para descendente)`
     )
     .optional(),
-  page: z.coerce.number({ error: "page debe ser un número" }).int("page debe ser un entero").positive("page debe ser mayor a 0").default(1),
-  limit: z.coerce
-    .number({ error: "limit debe ser un número" })
-    .int("limit debe ser un entero")
-    .positive("limit debe ser mayor a 0")
-    .max(100, "limit no puede superar 100")
+  page: enteroPositivoDeTexto("page").default(1),
+  limit: enteroPositivoDeTexto("limit")
+    .refine((n) => n <= 100, "limit no puede superar 100")
     .default(20),
 });
 
 // Parámetro de ruta :id (GET /activos/:id, PUT, DELETE)
 const activoIdParamSchema = z.object({
-  id: z.coerce.number({ error: "El id debe ser un número" }).int("El id debe ser un número entero").positive("El id debe ser positivo"),
+  id: enteroPositivoDeTexto("El id"),
 });
 
 // Parámetros de ruta de un vínculo de la N:N (POST y DELETE /activos/:id/etiquetas/:etiquetaId)
 const activoEtiquetaParamSchema = activoIdParamSchema.extend({
-  etiquetaId: z.coerce
-    .number({ error: "El id de la etiqueta debe ser un número" })
-    .int("El id de la etiqueta debe ser un número entero")
-    .positive("El id de la etiqueta debe ser positivo"),
+  etiquetaId: enteroPositivoDeTexto("El id de la etiqueta"),
 });
 
 export { createActivoSchema, updateActivoSchema, queryActivosSchema, activoIdParamSchema, activoEtiquetaParamSchema, MERCADOS, NIVELES, CAMPOS_ORDENABLES };
