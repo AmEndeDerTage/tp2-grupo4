@@ -5,6 +5,7 @@
   "main": "index.js",
   "scripts": {
     "test": "vitest run",
+    "test:watch": "vitest",
     "start": "node --env-file=.env index.js",
     "dev": "node --env-file=.env --watch index.js"
   },
