@@ -38,7 +38,16 @@ function createDocsRouter() {
   // Los archivos de Swagger UI (scripts, estilos) y la página, que se responde solo en la raíz: cualquier otra ruta
   // debajo de /api-docs sigue de largo y termina en el 404 de siempre, en lugar de devolver la página.
   router.use(swaggerUi.serve);
-  router.get("/", swaggerUi.setup(spec, { customSiteTitle: "API Activos y Órdenes — docs" }));
+  router.get(
+    "/",
+    swaggerUi.setup(spec, {
+      customSiteTitle: "API Activos y Órdenes — docs",
+      swaggerOptions: {
+        persistAuthorization: true, // el token cargado en «Authorize» queda en el navegador y sobrevive a recargar la página
+        displayRequestDuration: true, // cada respuesta muestra cuánto tardó el pedido
+      },
+    })
+  );
   return router;
 }
 
