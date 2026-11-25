@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "description": "API REST en capas de Activos y Órdenes (CEDEARs) — TP Integrador de Taller de Programación 2, ORT Argentina",
   "main": "index.js",
+  "engines": {
+    "node": ">=20.17"
+  },
   "scripts": {
     "test": "vitest run",
     "test:watch": "vitest",
