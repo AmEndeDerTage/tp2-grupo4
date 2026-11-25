@@ -77,6 +77,12 @@ describe("la documentación coincide con las rutas de Express", () => {
   it.each(documentadas.filter((d) => d.conToken).map((d) => [d.clave, d.operacion]))("%s exige token y documenta el 401", (_, operacion) => {
     expect(operacion.responses).toHaveProperty("401");
   });
+
+  it("el inicio de sesión lleva su límite de intentos, y es lo primero que corre", () => {
+    const [, routerAuth] = MONTAJES[0];
+    const login = routerAuth.stack.find((capa) => capa.route?.path === "/login").route;
+    expect(login.stack[0].handle).toBe(loginLimiter);
+  });
 });
 
 describe("el documento OpenAPI es coherente por dentro", () => {
