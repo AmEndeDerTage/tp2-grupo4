@@ -59,6 +59,11 @@ if (!JWT_SECRET || JWT_SECRET.length < 32) {
   throw new Error("Falta JWT_SECRET o tiene menos de 32 caracteres (copiá .env.example a .env y generá uno: ver el comentario de esa variable)");
 }
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || "1h"; // vida de cada token: "15m", "1h", "7d"
+// Mismo criterio que arriba: un valor mal escrito corta el arranque. Sin esto, "1 hora" haría fallar cada inicio de
+// sesión con un 500, y un número sin unidad ("3600") se tomaría como milisegundos: tokens que duran 3 segundos.
+if (!/^[1-9]\d*[smhd]$/.test(JWT_EXPIRES_IN)) {
+  throw new Error(`JWT_EXPIRES_IN inválido: "${JWT_EXPIRES_IN}". Tiene que ser un número y una unidad (s, m, h o d): 30s, 15m, 1h, 7d`);
+}
 // El único usuario de la API. De su contraseña se guarda solo el hash bcrypt (se genera con: node scripts/hash.js "contraseña")
 const OPERADOR_USUARIO = process.env.OPERADOR_USUARIO || "operador";
 const OPERADOR_PASSWORD_HASH = process.env.OPERADOR_PASSWORD_HASH;
