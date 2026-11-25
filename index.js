@@ -32,8 +32,14 @@ async function startServer() {
   app.use(notFound);
   app.use(errorHandler);
 
-  // HOST decide quién llega: con 127.0.0.1 (el valor por defecto) solo esta máquina; con 0.0.0.0, también la red
-  app.listen(PORT, HOST, () => {
+  // HOST decide quién llega: con 127.0.0.1 (el valor por defecto) solo esta máquina; con 0.0.0.0, también la red.
+  // En Express 5 este callback recibe también el error de arranque (el puerto ya está en uso, una dirección que no es
+  // de esta máquina): sin mirarlo, se anunciaría «escucha» y el proceso terminaría sin haber escuchado nunca.
+  app.listen(PORT, HOST, (error) => {
+    if (error) {
+      console.error(`No se pudo escuchar en ${HOST}:${PORT}: ${error.message}`);
+      process.exit(1);
+    }
     console.log(`API de Activos y Órdenes en http://localhost:${PORT} · escucha en ${HOST} · persistencia: ${PERSISTENCE_TYPE}`);
   });
 }
