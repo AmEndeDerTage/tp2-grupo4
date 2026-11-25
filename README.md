@@ -144,6 +144,16 @@ Se leen del archivo `.env` (con `node --env-file=.env`, sin `dotenv`). `config/c
 | `OPERADOR_USUARIO` | texto | `operador` | Usuario del único operador |
 | `OPERADOR_PASSWORD_HASH` | hash bcrypt | **sin valor por defecto** | Hash de su contraseña (nunca la contraseña). Se genera con `node scripts/hash.js "contraseña"` |
 
+### Scripts
+
+| Comando | Qué hace |
+|---|---|
+| `npm start` | Arranca el servidor con las variables de `.env` |
+| `npm run dev` | Igual, y reinicia solo al guardar un archivo (`node --watch`) |
+| `npm test` | Corre todos los tests una vez. No necesita `.env`, base ni red |
+| `npm run test:watch` | Deja los tests corriendo y repite los afectados al guardar un archivo |
+| `node scripts/hash.js "contraseña"` | Imprime el hash bcrypt de una contraseña, para `OPERADOR_PASSWORD_HASH` |
+
 ## Cómo cambiar de persistencia
 
 Cambiar `PERSISTENCE_TYPE` en `.env` y reiniciar el servidor:
@@ -205,6 +215,8 @@ Con el servidor andando: **[`http://localhost:8000/api-docs`](http://localhost:8
 
 Es Swagger UI sobre la especificación OpenAPI 3 de `docs/openapi.yaml`, servida con `swagger-ui-express`. Cada endpoint tiene sus parámetros, cuerpos con ejemplos y todas sus respuestas posibles (200 · 201 · 204 · 400 · 404 · 409 · 429 · 500, más 401 en los que escriben y 413 y 415 en los pedidos con cuerpo). Los schemas de las entidades y del error se definen una vez en `components/schemas` y se reutilizan con `$ref`. «Try it out» funciona contra el servidor en los dos modos de persistencia. El listado de endpoints vive ahí y no se repite en este README.
 
+El YAML se escribe a mano, así que hay tests que lo atan al código (`tests/docs/`): fallan si una ruta queda sin documentar, si se documenta una operación que no existe o si el acceso documentado (pública o con token) no es el que la ruta tiene de verdad.
+
 **Postman u otras herramientas.** La misma especificación se publica cruda en `http://localhost:8000/api-docs/openapi.json`. En Postman, *Import → Link* con esa URL (o *Import → File* con `docs/openapi.yaml`) arma una colección con todos los pedidos, agrupados por entidad. La colección trae la variable `baseUrl` en `/`: hay que cambiarla por `http://localhost:8000`.
 
 ## Eventos de dominio
@@ -243,6 +255,8 @@ npm test
 
 Están en `tests/usecases/`, con la misma organización que `usecases/`, y cubren las reglas de negocio en sus casos feliz, de borde y de violación (verificando además que el estado no cambie y que no se emitan eventos), la ejecución con su vuelta atrás ante una falla, el alta atómica con etiquetas y los vínculos de la N:N. `tests/helpers/escenario.js` arma en cada test DAOs nuevos con sus propios datos, un bus espía y un reloj fijo. Además, `tests/security/` prueba el servicio de tokens contra cada ataque conocido a un JWT y el reconocimiento de pruebas de vulnerabilidad, `tests/usecases/auth/` el inicio de sesión y `tests/schemas/` la validación de textos y números.
 
+`tests/docs/` compara la documentación con las rutas reales: construye los routers con un controlador falso, lee sus rutas y las busca en `docs/openapi.yaml`, en los dos sentidos; verifica además que las rutas que exigen token lo digan (y documenten el 401), que los identificadores de operación no se repitan y que ningún `$ref` apunte a algo que no existe.
+
 **Pruebas manuales:** `requests.http` tiene los pedidos de punta a punta, cada uno con el resultado esperado en su título (`→ 409 TOPE_EXCEDIDO`). Se corre con la extensión **REST Client** de VS Code, en orden y con el servidor recién arrancado (en `sequelize`, después de borrar `database.sqlite`), en cualquiera de los dos modos.
 
 ## Arquitectura
@@ -263,8 +277,10 @@ middlewares/  errors/              logger, cabeceras, límites, autenticación, 
 security/           hash de contraseñas, tokens JWT y reconocimiento de pruebas de vulnerabilidad
 scripts/            generar el hash de una contraseña
 docs/               openapi.yaml y el router de Swagger UI
-tests/              tests de casos de uso, de seguridad y de validación (Vitest)
+tests/              tests de casos de uso, de seguridad, de validación y de la documentación (Vitest)
 ```
+
+La autoevaluación del proyecto contra un checklist de buenas prácticas, con la evidencia de cada punto, está en [`checklist.md`](checklist.md).
 
 ## Requisitos opcionales implementados
 
@@ -273,3 +289,39 @@ tests/              tests de casos de uso, de seguridad y de validación (Vitest
 - **Segundo evento con un notificador adicional**: `activo.topeCerca` por archivo y consola (y un tercero, `orden.ejecutada`).
 - **Tests automatizados de los casos de uso** con DAO en memoria como doble.
 - **Seguridad**: contraseña con hash (bcrypt) y autenticación con JWT en los pedidos que escriben, más límites de pedidos, cabeceras y validación reforzada (ver [Seguridad](#seguridad)).
+
+## Limitaciones conocidas
+
+Lo que la API no hace, o no hace del todo, a sabiendas:
+
+- **Sin migraciones.** La base se crea con `sync()`: si cambia un modelo hay que borrar `database.sqlite`.
+- **El modo `memory` también necesita `sqlite3` instalado**, porque la factory importa los dos adaptadores.
+- **Los eventos viven en la memoria del proceso.** Si el servidor se cae entre guardar y avisar, ese aviso se pierde: no hay una cola persistente.
+- **El aviso de tope se repite** en cada operación que deja al activo en el umbral o por encima, no solo la primera vez que lo cruza.
+- **La ejecución es entera y al precio límite:** no hay ejecuciones parciales ni un precio de ejecución distinto.
+- **Una orden vencida se puede ejecutar.** La regla 9 mira la validez al crear la orden y al cambiarle la fecha, no al ejecutarla.
+- **El nivel y la posición no se obligan a coincidir:** se puede dejar un activo `L0` con CEDEARs en cartera. Solo la ejecución mueve el nivel sola.
+- **Un solo proceso.** Las transacciones esperan su turno en una cola del proceso; con varios procesos sobre el mismo `database.sqlite` quedaría solo el bloqueo de SQLite.
+- **En `memory` no hay vuelta atrás automática:** las operaciones de varias escrituras verifican todo antes de escribir.
+- **El orden por `nombre` puede diferir entre los dos modos** cuando los nombres mezclan emojis con algunos caracteres poco comunes: JavaScript y SQLite comparan el texto de forma distinta. Es la única diferencia conocida entre los modos.
+- **Lo que no está declarado se ignora:** un parámetro de consulta o un campo del cuerpo desconocido no se rechaza, se descarta.
+- **Los tests automáticos usan los DAO en memoria.** El adaptador de Sequelize se prueba con `requests.http`, que da lo mismo en los dos modos.
+- **La documentación se escribe a mano.** Los tests de `tests/docs/` verifican rutas, acceso y referencias; la forma de cada respuesta no se verifica en `npm test`.
+- **Seguridad:** el token vale hasta que vence, los límites de pedidos viven en memoria y la API habla HTTP (ver «Límites conocidos» en [Seguridad](#seguridad)). Además hay un solo usuario, sin roles, y el secreto y el hash de `.env.example` son de ejemplo y están publicados: sirven solo para una prueba local.
+
+## Problemas frecuentes
+
+| Síntoma | Causa | Solución |
+|---|---|---|
+| No arranca: `Falta JWT_SECRET o tiene menos de 32 caracteres…` | No hay `.env`, o le falta esa variable | Copiar `.env.example` a `.env` |
+| No arranca: `Error: Could not locate the bindings file` | `sqlite3` quedó instalado sin su binario (la instalación no corrió su script) | Borrar `node_modules` y volver a correr `npm install` |
+| No arranca: `No se pudo escuchar en 127.0.0.1:8000: listen EADDRINUSE…` | Quedó otro servidor abierto en ese puerto | Cerrarlo, o usar otro `PORT` |
+| No arranca: `PERSISTENCE_TYPE inválido: …` | Un valor mal escrito en `.env` o en el entorno | Corregirlo: `memory` o `sequelize` |
+| Arranca en un modo que no es el de `.env` | Quedó la variable en el entorno de la terminal, que tiene prioridad sobre el archivo | PowerShell: `Remove-Item Env:PERSISTENCE_TYPE` |
+| Todo lo que escribe responde 401 `TOKEN_MISSING` | Falta el token | `POST /auth/login` y **Authorize** en Swagger UI, o el header `Authorization: Bearer <token>` |
+| 401 `TOKEN_EXPIRED` | Pasó más de `JWT_EXPIRES_IN` (1 h) desde el inicio de sesión | Iniciar sesión de nuevo |
+| 429 en todos los pedidos | Se superó un límite de pedidos por minuto | Esperar un minuto o reiniciar el servidor (la cuenta está en memoria) |
+| En `sequelize` los datos no son los de la semilla | `database.sqlite` quedó de una corrida anterior | Parar el servidor, borrar el archivo y arrancar de nuevo |
+| Toda alta de orden responde 409 `VALIDEZ_VENCIDA` | `CLOCK_NOW` quedó fijo en una fecha posterior a la validez de la orden | Vaciar `CLOCK_NOW` |
+| `/api-docs` responde 404 | `NODE_ENV=production` | Quitar esa variable y reiniciar |
+| Desde otra máquina no conecta | Escucha solo en `127.0.0.1` | `HOST=0.0.0.0` (a propósito: la abre a la red) |
