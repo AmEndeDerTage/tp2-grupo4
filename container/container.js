@@ -20,6 +20,7 @@ import createClock from "../utils/clock.js";
 import createPasswordHasher from "../security/passwordHasher.js";
 import createTokenService from "../security/tokenService.js";
 import createAuthMiddlewares from "../middlewares/auth.js";
+import { loginLimiter } from "../middlewares/rateLimit.js";
 import makeAuthUseCases from "../usecases/auth/makeAuthUseCases.js";
 import AuthController from "../controllers/AuthController.js";
 import createAuthRouter from "../routes/authRoutes.js";
@@ -88,9 +89,10 @@ async function buildContainer() {
   const authController = new AuthController(authUseCases);
 
   // 5. Routers con los controladores inyectados, montados en el router principal.
-  //    Los de las entidades reciben además el middleware de autenticación, para exigirlo en sus rutas que escriben.
+  //    Los de las entidades reciben además el middleware de autenticación, para exigirlo en sus rutas que escriben;
+  //    el de autenticación, el límite de intentos fallidos de inicio de sesión.
   const router = Router();
-  router.use("/auth", createAuthRouter(authController));
+  router.use("/auth", createAuthRouter(authController, { loginLimiter }));
   router.use("/activos", createActivosRouter(activosController, auth));
   router.use("/ordenes", createOrdenesRouter(ordenesController, auth));
   router.use("/etiquetas", createEtiquetasRouter(etiquetasController, auth));
